@@ -1,0 +1,206 @@
+{
+  "city": "mumbai",
+  "metadata": {
+    "source": "Synthetic demo data - NOT real municipal records",
+    "osm_reference_area": "Andheri West, Ward K/W, Mumbai",
+    "generated_for": "DIYA - All Things Agentic Hackathon 2026"
+  },
+  "departments": [
+    {
+      "id": "dept-roads",
+      "name": "Roads & Bridges Department",
+      "ulb_reference": "MCGM Engineering Department (Roads)",
+      "agent_identity_id": "agent-identity-roads-001"
+    },
+    {
+      "id": "dept-water",
+      "name": "Water Supply & Sewerage Department",
+      "ulb_reference": "MCGM Hydraulic Engineering Department",
+      "agent_identity_id": "agent-identity-water-001"
+    },
+    {
+      "id": "dept-telecom",
+      "name": "Telecom & Fiber Infrastructure",
+      "ulb_reference": "Licensed Telecom Operators (Jio, Airtel, BSNL)",
+      "agent_identity_id": "agent-identity-telecom-001"
+    },
+    {
+      "id": "dept-sewage",
+      "name": "Sewage & Drainage Department",
+      "ulb_reference": "MCGM Storm Water Drains Department",
+      "agent_identity_id": "agent-identity-sewage-001"
+    }
+  ],
+  "planned_works": [
+    {
+      "id": "pw-mum-001",
+      "dept_id": "dept-roads",
+      "title": "SV Road Resurfacing - Andheri West",
+      "description": "Complete bituminous resurfacing of SV Road from Andheri station junction to Juhu Circle. Includes pothole repair, drainage cover replacement, and road marking.",
+      "location": {
+        "lat": 19.1197,
+        "lng": 72.8464,
+        "way_id": "way-48213001",
+        "street_name": "SV Road (Swami Vivekananda Road)",
+        "ward": "K/W",
+        "landmark": "Near Andheri Railway Station West"
+      },
+      "geofence_radius_m": 200,
+      "start_date": "2026-09-15",
+      "end_date": "2026-10-30",
+      "work_type": "Resurfacing",
+      "estimated_budget_inr": 45000000,
+      "traffic_impact": "Full road closure in phases, diversions via Link Road"
+    },
+    {
+      "id": "pw-mum-002",
+      "dept_id": "dept-roads",
+      "title": "LBS Marg Flyover Repair - Kurla",
+      "description": "Structural repair and waterproofing of LBS Marg flyover near Kurla terminus. Expansion joint replacement and bearing pad renewal.",
+      "location": {
+        "lat": 19.0726,
+        "lng": 72.8793,
+        "way_id": "way-48213002",
+        "street_name": "LBS Marg (Lal Bahadur Shastri Marg)",
+        "ward": "L",
+        "landmark": "Near Kurla Terminus"
+      },
+      "geofence_radius_m": 150,
+      "start_date": "2026-10-01",
+      "end_date": "2026-11-15",
+      "work_type": "Structural Repair",
+      "estimated_budget_inr": 78000000,
+      "traffic_impact": "Partial lane closure, alternate flyover route available"
+    },
+    {
+      "id": "pw-mum-003",
+      "dept_id": "dept-roads",
+      "title": "FC Road Widening - Dadar",
+      "description": "Road widening along FC Road near Shivaji Park with new pedestrian pathway and cycle track installation.",
+      "location": {
+        "lat": 19.0186,
+        "lng": 72.8429,
+        "way_id": "way-48213003",
+        "street_name": "FC Road (Gopal Krishna Gokhale Road)",
+        "ward": "G/N",
+        "landmark": "Near Shivaji Park"
+      },
+      "geofence_radius_m": 180,
+      "start_date": "2026-09-01",
+      "end_date": "2026-12-15",
+      "work_type": "Widening",
+      "estimated_budget_inr": 120000000,
+      "traffic_impact": "Major diversions expected, work in phases"
+    },
+    {
+      "id": "pw-mum-004",
+      "dept_id": "dept-water",
+      "title": "Water Main Replacement - SV Road Segment",
+      "description": "Replacement of 900mm CI water main along SV Road from DN Nagar to Irla Bridge. Includes valve chamber construction and 45 new service connections.",
+      "location": {
+        "lat": 19.1185,
+        "lng": 72.8451,
+        "way_id": "way-48213001",
+        "street_name": "SV Road (Swami Vivekananda Road)",
+        "ward": "K/W",
+        "landmark": "DN Nagar to Irla Bridge stretch"
+      },
+      "geofence_radius_m": 200,
+      "start_date": "2026-10-01",
+      "end_date": "2026-11-30",
+      "work_type": "Water Main Replacement",
+      "estimated_budget_inr": 35000000,
+      "traffic_impact": "Trench cutting required, partial road closure"
+    },
+    {
+      "id": "pw-mum-005",
+      "dept_id": "dept-water",
+      "title": "Bandra Pipeline Extension",
+      "description": "Extension of 600mm water pipeline from Bandra Reclamation to Carter Road with new distribution network for 2,000 connections.",
+      "location": {
+        "lat": 19.0544,
+        "lng": 72.8264,
+        "way_id": "way-48213005",
+        "street_name": "Carter Road",
+        "ward": "H/W",
+        "landmark": "Bandra Reclamation to Carter Road"
+      },
+      "geofence_radius_m": 250,
+      "start_date": "2026-11-01",
+      "end_date": "2027-01-15",
+      "work_type": "Pipeline Extension",
+      "estimated_budget_inr": 55000000,
+      "traffic_impact": "Moderate, phased trenching"
+    },
+    {
+      "id": "pw-mum-006",
+      "dept_id": "dept-telecom",
+      "title": "OFC Laying - SV Road to Link Road",
+      "description": "Optical fiber cable laying from SV Road junction through internal roads to Link Road. HDPE duct installation with 96-fiber cable for FTTH rollout.",
+      "location": {
+        "lat": 19.1201,
+        "lng": 72.8470,
+        "way_id": "way-48213001",
+        "street_name": "SV Road (Swami Vivekananda Road)",
+        "ward": "K/W",
+        "landmark": "SV Road Junction to Link Road via Veera Desai Road"
+      },
+      "geofence_radius_m": 150,
+      "start_date": "2026-09-20",
+      "end_date": "2026-10-20",
+      "work_type": "OFC Laying",
+      "estimated_budget_inr": 12000000,
+      "traffic_impact": "Shallow trenching, minimal surface disruption"
+    },
+    {
+      "id": "pw-mum-007",
+      "dept_id": "dept-telecom",
+      "title": "5G Small Cell Installation - BKC",
+      "description": "Installation of 25 5G small cells along BKC connector roads with fiber backhaul. Pole mounting and cabinet installation.",
+      "location": {
+        "lat": 19.0660,
+        "lng": 72.8693,
+        "way_id": "way-48213007",
+        "street_name": "BKC Road",
+        "ward": "H/E",
+        "landmark": "Bandra-Kurla Complex"
+      },
+      "geofence_radius_m": 500,
+      "start_date": "2026-10-15",
+      "end_date": "2026-12-30",
+      "work_type": "5G Installation",
+      "estimated_budget_inr": 28000000,
+      "traffic_impact": "Intermittent lane closures for crane operations"
+    },
+    {
+      "id": "pw-mum-008",
+      "dept_id": "dept-sewage",
+      "title": "Storm Drain Upgrade - Andheri Subway",
+      "description": "Upgrade of storm water drain capacity near Andheri subway. Box drain construction with 2x increased cross-section to prevent waterlogging during monsoon.",
+      "location": {
+        "lat": 19.1190,
+        "lng": 72.8458,
+        "way_id": "way-48213001",
+        "street_name": "SV Road (Swami Vivekananda Road)",
+        "ward": "K/W",
+        "landmark": "Near Andheri Subway"
+      },
+      "geofence_radius_m": 180,
+      "start_date": "2026-10-15",
+      "end_date": "2026-12-15",
+      "work_type": "Storm Drain Upgrade",
+      "estimated_budget_inr": 42000000,
+      "traffic_impact": "Deep excavation required, full lane closure near subway"
+    }
+  ],
+  "seeded_conflicts": [
+    {
+      "id": "conf-001",
+      "work_ids": ["pw-mum-001", "pw-mum-004", "pw-mum-006", "pw-mum-008"],
+      "overlap_type": "both",
+      "location_summary": "SV Road, Andheri West, Ward K/W",
+      "severity": "critical",
+      "description": "4-way conflict: Road resurfacing, water main replacement, OFC laying, and storm drain upgrade all targeting the same 200m stretch of SV Road within overlapping timeframes."
+    }
+  ]
+}

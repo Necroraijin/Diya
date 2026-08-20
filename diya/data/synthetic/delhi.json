@@ -1,0 +1,146 @@
+{
+  "city": "delhi",
+  "metadata": {
+    "source": "Synthetic demo data - NOT real municipal records",
+    "osm_reference_area": "Chandni Chowk, Old Delhi",
+    "generated_for": "DIYA - All Things Agentic Hackathon 2026"
+  },
+  "departments": [
+    {
+      "id": "dept-roads",
+      "name": "Public Works Department (PWD)",
+      "ulb_reference": "MCD / PWD Delhi",
+      "agent_identity_id": "agent-identity-roads-001"
+    },
+    {
+      "id": "dept-water",
+      "name": "Delhi Jal Board (DJB)",
+      "ulb_reference": "Delhi Jal Board",
+      "agent_identity_id": "agent-identity-water-001"
+    },
+    {
+      "id": "dept-telecom",
+      "name": "Telecom Infrastructure Division",
+      "ulb_reference": "Licensed Telecom Operators",
+      "agent_identity_id": "agent-identity-telecom-001"
+    },
+    {
+      "id": "dept-sewage",
+      "name": "Drainage & Sewerage Division",
+      "ulb_reference": "MCD Drainage Department",
+      "agent_identity_id": "agent-identity-sewage-001"
+    }
+  ],
+  "planned_works": [
+    {
+      "id": "pw-del-001",
+      "dept_id": "dept-roads",
+      "title": "Chandni Chowk Road Restoration",
+      "description": "Post-monsoon restoration of Chandni Chowk main road. Milling and re-laying of bituminous surface with improved camber for drainage.",
+      "location": {
+        "lat": 28.6562,
+        "lng": 77.2310,
+        "way_id": "way-92001001",
+        "street_name": "Chandni Chowk Road",
+        "ward": "Chandni Chowk",
+        "landmark": "Red Fort to Fatehpuri Masjid stretch"
+      },
+      "geofence_radius_m": 200,
+      "start_date": "2026-09-10",
+      "end_date": "2026-10-25",
+      "work_type": "Restoration",
+      "estimated_budget_inr": 38000000,
+      "traffic_impact": "Pedestrianized zone - vehicle diversions for material transport only"
+    },
+    {
+      "id": "pw-del-002",
+      "dept_id": "dept-water",
+      "title": "DJB Pipeline Relaying - Chandni Chowk",
+      "description": "Relaying of aged 450mm DI pipeline under Chandni Chowk Road. Includes 120 house service connection renewals in the heritage zone.",
+      "location": {
+        "lat": 28.6558,
+        "lng": 77.2305,
+        "way_id": "way-92001001",
+        "street_name": "Chandni Chowk Road",
+        "ward": "Chandni Chowk",
+        "landmark": "Town Hall to Gurudwara Sis Ganj"
+      },
+      "geofence_radius_m": 200,
+      "start_date": "2026-09-25",
+      "end_date": "2026-11-10",
+      "work_type": "Pipeline Relaying",
+      "estimated_budget_inr": 25000000,
+      "traffic_impact": "Trench excavation in pedestrian zone, shop access maintained"
+    },
+    {
+      "id": "pw-del-003",
+      "dept_id": "dept-telecom",
+      "title": "FTTH Network Expansion - Karol Bagh",
+      "description": "Fiber-to-the-home network expansion covering 15 blocks in Karol Bagh residential area. Underground duct laying and overhead cable pulling.",
+      "location": {
+        "lat": 28.6519,
+        "lng": 77.1909,
+        "way_id": "way-92001003",
+        "street_name": "Ajmal Khan Road",
+        "ward": "Karol Bagh",
+        "landmark": "Karol Bagh Metro to Gaffar Market"
+      },
+      "geofence_radius_m": 400,
+      "start_date": "2026-10-01",
+      "end_date": "2026-12-15",
+      "work_type": "FTTH Expansion",
+      "estimated_budget_inr": 18000000,
+      "traffic_impact": "Internal roads, moderate disruption"
+    },
+    {
+      "id": "pw-del-004",
+      "dept_id": "dept-telecom",
+      "title": "Duct Repair - Connaught Place Inner Circle",
+      "description": "Repair and cleaning of existing telecom ducts along CP inner circle. Cable pulling for upgraded 10Gbps backbone capacity.",
+      "location": {
+        "lat": 28.6315,
+        "lng": 77.2167,
+        "way_id": "way-92001004",
+        "street_name": "Connaught Place Inner Circle",
+        "ward": "Connaught Place",
+        "landmark": "Block A to Block N, Inner Circle"
+      },
+      "geofence_radius_m": 300,
+      "start_date": "2026-09-05",
+      "end_date": "2026-09-30",
+      "work_type": "Duct Repair",
+      "estimated_budget_inr": 8000000,
+      "traffic_impact": "Night work only, no daytime disruption"
+    },
+    {
+      "id": "pw-del-005",
+      "dept_id": "dept-sewage",
+      "title": "Sewer Line Rehabilitation - Chandni Chowk",
+      "description": "Trenchless rehabilitation of 600mm sewer line using CIPP (Cured-in-Place Pipe) method under Chandni Chowk Road. Minimal surface disruption.",
+      "location": {
+        "lat": 28.6565,
+        "lng": 77.2315,
+        "way_id": "way-92001001",
+        "street_name": "Chandni Chowk Road",
+        "ward": "Chandni Chowk",
+        "landmark": "Near Lal Mandir"
+      },
+      "geofence_radius_m": 180,
+      "start_date": "2026-10-10",
+      "end_date": "2026-11-20",
+      "work_type": "Sewer Rehabilitation",
+      "estimated_budget_inr": 15000000,
+      "traffic_impact": "Manhole access points only, trenchless method"
+    }
+  ],
+  "seeded_conflicts": [
+    {
+      "id": "conf-002",
+      "work_ids": ["pw-del-001", "pw-del-002", "pw-del-005"],
+      "overlap_type": "both",
+      "location_summary": "Chandni Chowk Road, Old Delhi",
+      "severity": "critical",
+      "description": "3-way conflict: Road restoration, DJB pipeline relaying, and sewer rehabilitation all targeting Chandni Chowk Road within overlapping timeframes."
+    }
+  ]
+}

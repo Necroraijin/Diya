@@ -1,0 +1,82 @@
+version: '3.8'
+
+services:
+  # ── Frontend ────────────────────────────────────────────────────
+  web:
+    build:
+      context: ../apps/web
+      dockerfile: ../../docker/Dockerfile.web
+    ports:
+      - "3000:3000"
+    environment:
+      - NEXT_PUBLIC_API_URL=http://api-gateway:8000
+    depends_on:
+      - api-gateway
+    networks:
+      - diya-network
+
+  # ── API Gateway ─────────────────────────────────────────────────
+  api-gateway:
+    build:
+      context: ../apps/api-gateway
+      dockerfile: ../../docker/Dockerfile.api-gateway
+    ports:
+      - "8000:8000"
+    environment:
+      - MESH_SERVICE_URL=http://mesh-service:8001
+      - AGENT_SERVICE_URL=http://agent-service:8002
+      - NOTICE_SERVICE_URL=http://notice-service:8003
+      - FIRESTORE_EMULATOR_HOST=firestore:8080
+    depends_on:
+      - mesh-service
+      - agent-service
+      - notice-service
+    networks:
+      - diya-network
+
+  # ── Mesh Service ────────────────────────────────────────────────
+  mesh-service:
+    build:
+      context: ../apps/mesh-service
+      dockerfile: ../../docker/Dockerfile.mesh-service
+    ports:
+      - "8001:8001"
+    environment:
+      - PORT=8001
+    networks:
+      - diya-network
+
+  # ── Agent Service ───────────────────────────────────────────────
+  agent-service:
+    build:
+      context: ../apps/agent-service
+      dockerfile: ../../docker/Dockerfile.agent-service
+    ports:
+      - "8002:8002"
+    environment:
+      - PORT=8002
+      - GOOGLE_CLOUD_PROJECT=${GOOGLE_CLOUD_PROJECT:-diya-demo}
+      - VERTEX_AI_LOCATION=${VERTEX_AI_LOCATION:-us-central1}
+    networks:
+      - diya-network
+
+  # ── Notice Service ──────────────────────────────────────────────
+  notice-service:
+    build:
+      context: ../apps/notice-service
+      dockerfile: ../../docker/Dockerfile.notice-service
+    ports:
+      - "8003:8003"
+    environment:
+      - PORT=8003
+    volumes:
+      - notice-storage:/app/output
+    networks:
+      - diya-network
+
+networks:
+  diya-network:
+    driver: bridge
+
+volumes:
+  notice-storage:
