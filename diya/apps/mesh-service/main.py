@@ -1,166 +1,311 @@
 """
 DIYA Mesh Service
-GIS data processing: OSM data fetching, caching, and spatial overlap analysis.
+
+GIS subsystem (PRD §8): OSM ingestion with disk caching, addressable mesh
+objects keyed by OSM way id, and shapely-backed spatial analysis of the
+geofences attached to planned works.
+
+Spatial maths runs in a local equirectangular projection centred on the city, so
+shapely operates in metres rather than degrees and intersection areas are real
+areas rather than meaningless degree-squared numbers.
 """
 
+from __future__ import annotations
+
+import math
+import os
+from typing import Any, Optional
+
+import httpx
 from fastapi import FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel
-from typing import Optional
-import json
-import os
+from pydantic import BaseModel, Field
+from shapely.geometry import LineString, Point, mapping
+from shapely.ops import unary_union
 
-app = FastAPI(title="DIYA Mesh Service", version="1.0.0")
+import fallback
+import osm
+
+app = FastAPI(
+    title="DIYA Mesh Service",
+    description="OSM ingestion and spatial conflict analysis",
+    version="2.0.0",
+)
+
+ALLOWED_ORIGINS = [
+    o.strip() for o in os.environ.get("CORS_ORIGINS", "http://localhost:3000").split(",")
+]
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
-    allow_methods=["*"],
+    allow_origins=ALLOWED_ORIGINS,
+    allow_credentials=True,
+    allow_methods=["GET", "POST"],
     allow_headers=["*"],
 )
 
-# ── City Configurations ──────────────────────────────────────────
 
-CITIES = {
-    "mumbai": {
-        "name": "Mumbai",
-        "center": [72.8777, 19.076],
-        "zoom": 14,
-        "bounds": [[72.82, 19.0], [72.94, 19.15]],
-        "overpass_query": '[out:json];(way["building"](19.115,72.840,19.125,72.852);way["highway"](19.115,72.840,19.125,72.852););out body;>;out skel qt;',
-    },
-    "delhi": {
-        "name": "Delhi",
-        "center": [77.2295, 28.6139],
-        "zoom": 14,
-        "bounds": [[77.15, 28.55], [77.32, 28.7]],
-        "overpass_query": '[out:json];(way["building"](28.650,77.225,28.660,77.235);way["highway"](28.650,77.225,28.660,77.235););out body;>;out skel qt;',
-    },
-}
+# ── Local projection ─────────────────────────────────────────────
 
-# Mock building data (same as frontend for consistency)
-MUMBAI_BUILDINGS = [
-    {"coordinates": [[72.8450, 19.1190], [72.8460, 19.1190], [72.8460, 19.1200], [72.8450, 19.1200]], "height": 30, "wayId": "bld-001"},
-    {"coordinates": [[72.8462, 19.1188], [72.8472, 19.1188], [72.8472, 19.1198], [72.8462, 19.1198]], "height": 45, "wayId": "bld-002"},
-    {"coordinates": [[72.8440, 19.1195], [72.8448, 19.1195], [72.8448, 19.1205], [72.8440, 19.1205]], "height": 20, "wayId": "bld-003"},
-    {"coordinates": [[72.8474, 19.1192], [72.8484, 19.1192], [72.8484, 19.1202], [72.8474, 19.1202]], "height": 55, "wayId": "bld-004"},
-    {"coordinates": [[72.8445, 19.1178], [72.8455, 19.1178], [72.8455, 19.1188], [72.8445, 19.1188]], "height": 35, "wayId": "bld-005"},
-]
+class LocalProjection:
+    """
+    Equirectangular projection about a city centre.
 
-MUMBAI_ROADS = [
-    {"path": [[72.8430, 19.1197], [72.8440, 19.1197], [72.8450, 19.1197], [72.8460, 19.1197], [72.8470, 19.1197], [72.8480, 19.1197], [72.8490, 19.1197]], "wayId": "way-48213001", "name": "SV Road", "width": 4},
-    {"path": [[72.8450, 19.1170], [72.8450, 19.1180], [72.8450, 19.1190], [72.8450, 19.1200], [72.8450, 19.1210], [72.8450, 19.1220]], "wayId": "way-48213010", "name": "DN Nagar Road", "width": 3},
-    {"path": [[72.8470, 19.1170], [72.8470, 19.1180], [72.8470, 19.1190], [72.8470, 19.1200], [72.8470, 19.1210]], "wayId": "way-48213011", "name": "Link Road", "width": 3},
-]
+    Accurate to well under a metre across a 1–2 km² demo zone, which is all
+    PRD §3 scopes us to, and avoids pulling pyproj into the image.
+    """
+
+    METRES_PER_DEGREE_LAT = 111_320.0
+
+    def __init__(self, center_lng: float, center_lat: float) -> None:
+        self.center_lng = center_lng
+        self.center_lat = center_lat
+        self.metres_per_degree_lng = self.METRES_PER_DEGREE_LAT * math.cos(
+            math.radians(center_lat)
+        )
+
+    def to_m(self, lng: float, lat: float) -> tuple[float, float]:
+        return (
+            (lng - self.center_lng) * self.metres_per_degree_lng,
+            (lat - self.center_lat) * self.METRES_PER_DEGREE_LAT,
+        )
+
+    def to_deg(self, x: float, y: float) -> tuple[float, float]:
+        return (
+            self.center_lng + x / self.metres_per_degree_lng,
+            self.center_lat + y / self.METRES_PER_DEGREE_LAT,
+        )
+
+
+def _projection_for(works: list[dict]) -> LocalProjection:
+    lats = [w["location"]["lat"] for w in works]
+    lngs = [w["location"]["lng"] for w in works]
+    return LocalProjection(sum(lngs) / len(lngs), sum(lats) / len(lats))
+
+
+def _geofence(work: dict, projection: LocalProjection):
+    loc = work["location"]
+    x, y = projection.to_m(loc["lng"], loc["lat"])
+    radius = work.get("geofenceRadius") or work.get("geofence_radius_m") or 100
+    # quad_segs=32 keeps the circle smooth enough that area error is < 0.1%.
+    return Point(x, y).buffer(float(radius), quad_segs=32)
+
+
+# ── Models ───────────────────────────────────────────────────────
+
+class SpatialOverlapRequest(BaseModel):
+    works: list[dict]
+    min_overlap_area_m2: float = Field(
+        default=0.0, description="Discard intersections smaller than this."
+    )
+
+
+class ConflictZoneRequest(BaseModel):
+    works: list[dict]
+    simplify_tolerance_m: float = 5.0
 
 
 # ── Routes ───────────────────────────────────────────────────────
 
 @app.get("/")
 async def root():
-    return {"service": "DIYA Mesh Service", "status": "operational"}
+    return {"service": "DIYA Mesh Service", "status": "operational", "version": "2.0.0"}
 
 
 @app.get("/health")
 async def health():
-    return {"status": "healthy"}
+    return {
+        "status": "healthy",
+        "overpass_url": osm.OVERPASS_URL,
+        "cache_dir": str(osm.CACHE_DIR),
+        "cached_cities": sorted(
+            p.stem for p in osm.CACHE_DIR.glob("*.json")
+        ) if osm.CACHE_DIR.is_dir() else [],
+    }
 
 
 @app.get("/cities")
 async def list_cities():
     return {
         "cities": [
-            {"id": k, "name": v["name"], "center": v["center"], "zoom": v["zoom"]}
-            for k, v in CITIES.items()
+            {
+                "id": key,
+                "name": cfg["name"],
+                "ward": cfg["ward"],
+                "center": cfg["center"],
+                "zoom": cfg["zoom"],
+                "bbox": cfg["bbox"],
+            }
+            for key, cfg in fallback.CITIES.items()
         ]
     }
 
 
 @app.get("/mesh/{city}")
-async def get_city_mesh(city: str, ward: Optional[str] = None):
-    """Returns building footprints and road network for a city."""
-    if city not in CITIES:
-        raise HTTPException(status_code=404, detail=f"City '{city}' not available. Options: {list(CITIES.keys())}")
+async def get_city_mesh(
+    city: str,
+    refresh: bool = Query(False, description="Bypass cache and re-query Overpass"),
+):
+    """
+    Building footprints and road network for a city.
 
-    config = CITIES[city]
+    Resolution order: disk cache -> Overpass -> bundled fallback geometry.
+    """
+    if city not in fallback.CITIES:
+        raise HTTPException(
+            status_code=404,
+            detail=f"City '{city}' not available. Options: {sorted(fallback.CITIES)}",
+        )
 
-    if city == "mumbai":
-        return {
-            "city": city,
-            "name": config["name"],
-            "center": config["center"],
-            "zoom": config["zoom"],
-            "bounds": config["bounds"],
-            "buildings": MUMBAI_BUILDINGS,
-            "roads": MUMBAI_ROADS,
-            "source": "osm-cache",
-            "cached": True,
-        }
+    config = fallback.CITIES[city]
+    source = "fallback-bundled"
+    geometry = fallback.GEOMETRY[city]
 
-    # Delhi minimal data
+    cached = None if refresh else osm.read_cache(city)
+    if cached:
+        geometry = {"buildings": cached["buildings"], "roads": cached["roads"]}
+        source = "osm-cache"
+    else:
+        try:
+            raw = await osm.fetch_overpass(fallback.overpass_query(config["bbox"]))
+            parsed = osm.parse_overpass(raw)
+            if parsed["buildings"] or parsed["roads"]:
+                osm.write_cache(city, parsed)
+                geometry = parsed
+                source = "osm-live"
+        except (httpx.HTTPError, ValueError, KeyError) as exc:
+            # PRD red flag #3: OSM coverage/availability must never be a demo risk.
+            print(f"[mesh] Overpass unavailable for {city} ({exc}); using bundled geometry.")
+
     return {
         "city": city,
         "name": config["name"],
+        "ward": config["ward"],
         "center": config["center"],
         "zoom": config["zoom"],
-        "bounds": config["bounds"],
-        "buildings": [
-            {"coordinates": [[77.2300, 28.6555], [77.2310, 28.6555], [77.2310, 28.6565], [77.2300, 28.6565]], "height": 15, "wayId": "bld-d001"},
-            {"coordinates": [[77.2312, 28.6558], [77.2322, 28.6558], [77.2322, 28.6568], [77.2312, 28.6568]], "height": 12, "wayId": "bld-d002"},
-        ],
-        "roads": [
-            {"path": [[77.2280, 28.6562], [77.2290, 28.6562], [77.2300, 28.6562], [77.2310, 28.6562], [77.2320, 28.6562], [77.2330, 28.6562]], "wayId": "way-92001001", "name": "Chandni Chowk Road", "width": 4},
-        ],
-        "source": "osm-cache",
-        "cached": True,
+        "bbox": config["bbox"],
+        "buildings": geometry["buildings"],
+        "roads": geometry["roads"],
+        "counts": {
+            "buildings": len(geometry["buildings"]),
+            "roads": len(geometry["roads"]),
+        },
+        "source": source,
     }
-
-
-class SpatialOverlapRequest(BaseModel):
-    works: list[dict]
-    threshold_meters: float = 50.0
 
 
 @app.post("/spatial/overlap")
 async def check_spatial_overlap(request: SpatialOverlapRequest):
     """
-    Check spatial overlap between planned works using geofence intersection.
-    Uses simple distance-based check (Haversine would be used in production).
+    Pairwise geofence intersection across the supplied works.
+
+    Unlike a centroid-distance check this reports the actual intersecting area,
+    which is what makes "how badly do these two collide" answerable.
     """
-    overlaps = []
     works = request.works
+    if len(works) < 2:
+        return {"overlaps": [], "count": 0, "analysed_works": len(works)}
+
+    projection = _projection_for(works)
+    fences = {w["id"]: _geofence(w, projection) for w in works}
+    overlaps: list[dict[str, Any]] = []
 
     for i in range(len(works)):
         for j in range(i + 1, len(works)):
-            w1 = works[i]
-            w2 = works[j]
-            loc1 = w1.get("location", {})
-            loc2 = w2.get("location", {})
+            a, b = works[i], works[j]
+            fa, fb = fences[a["id"]], fences[b["id"]]
+            if not fa.intersects(fb):
+                continue
 
-            # Simple Euclidean approximation (sufficient for demo zone)
-            dlat = abs(loc1.get("lat", 0) - loc2.get("lat", 0)) * 111000  # ~111km per degree
-            dlng = abs(loc1.get("lng", 0) - loc2.get("lng", 0)) * 85000   # ~85km per degree at these latitudes
-            distance = (dlat**2 + dlng**2) ** 0.5
+            intersection = fa.intersection(fb)
+            area = intersection.area
+            if area < request.min_overlap_area_m2:
+                continue
 
-            r1 = w1.get("geofenceRadius", 100)
-            r2 = w2.get("geofenceRadius", 100)
+            ax, ay = projection.to_m(a["location"]["lng"], a["location"]["lat"])
+            bx, by = projection.to_m(b["location"]["lng"], b["location"]["lat"])
+            distance = math.hypot(ax - bx, ay - by)
 
-            if distance < (r1 + r2) / 2:
-                overlaps.append({
-                    "work1": w1.get("id"),
-                    "work2": w2.get("id"),
-                    "distance_m": round(distance, 1),
-                    "overlap": True,
-                    "wayId_match": loc1.get("wayId") == loc2.get("wayId"),
-                })
+            overlaps.append({
+                "work1": a["id"],
+                "work2": b["id"],
+                "distance_m": round(distance, 1),
+                "intersection_area_m2": round(area, 1),
+                "overlap_fraction": round(area / min(fa.area, fb.area), 3),
+                "same_way_id": a["location"].get("wayId") == b["location"].get("wayId"),
+                "way_id": a["location"].get("wayId"),
+            })
 
+    overlaps.sort(key=lambda o: -o["intersection_area_m2"])
     return {
         "overlaps": overlaps,
         "count": len(overlaps),
-        "threshold_meters": request.threshold_meters,
+        "analysed_works": len(works),
     }
+
+
+@app.post("/spatial/conflict-zones")
+async def conflict_zones(request: ConflictZoneRequest):
+    """
+    Dissolved GeoJSON polygons covering every area where two or more geofences
+    intersect — the shape the map renders as a conflict overlay.
+    """
+    works = request.works
+    if len(works) < 2:
+        return {"type": "FeatureCollection", "features": []}
+
+    projection = _projection_for(works)
+    fences = [(w, _geofence(w, projection)) for w in works]
+
+    pieces = []
+    members: set[str] = set()
+    for i in range(len(fences)):
+        for j in range(i + 1, len(fences)):
+            (wa, fa), (wb, fb) = fences[i], fences[j]
+            if fa.intersects(fb):
+                pieces.append(fa.intersection(fb))
+                members.update({wa["id"], wb["id"]})
+
+    if not pieces:
+        return {"type": "FeatureCollection", "features": []}
+
+    dissolved = unary_union(pieces).simplify(request.simplify_tolerance_m)
+    polygons = list(getattr(dissolved, "geoms", [dissolved]))
+
+    features = []
+    for index, polygon in enumerate(polygons):
+        geo = mapping(polygon)
+        geo["coordinates"] = _coords_to_degrees(geo["coordinates"], projection)
+        features.append({
+            "type": "Feature",
+            "id": f"zone-{index + 1}",
+            "geometry": geo,
+            "properties": {
+                "area_m2": round(polygon.area, 1),
+                "work_ids": sorted(members),
+            },
+        })
+
+    return {"type": "FeatureCollection", "features": features}
+
+
+@app.post("/spatial/works-on-way")
+async def works_on_way(request: SpatialOverlapRequest, way_id: str = Query(...)):
+    """Which works touch a given OSM way — the reverse lookup for map clicks."""
+    matches = [
+        w for w in request.works if w.get("location", {}).get("wayId") == way_id
+    ]
+    return {"way_id": way_id, "works": matches, "count": len(matches)}
+
+
+def _coords_to_degrees(coords, projection: LocalProjection):
+    """Recursively convert projected metre coordinates back to [lng, lat]."""
+    if coords and isinstance(coords[0], (int, float)):
+        return list(projection.to_deg(coords[0], coords[1]))
+    return [_coords_to_degrees(c, projection) for c in coords]
 
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=8001)
+
+    uvicorn.run(app, host="0.0.0.0", port=int(os.environ.get("PORT", 8001)))

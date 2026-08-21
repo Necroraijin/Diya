@@ -1,0 +1,19 @@
+[project]
+name = "diya-core"
+version = "1.0.0"
+description = "Shared domain models, seed loading, conflict detection and persistence for DIYA services"
+requires-python = ">=3.11"
+dependencies = [
+    "pydantic>=2.10",
+]
+
+[project.optional-dependencies]
+firestore = ["google-cloud-firestore>=2.19"]
+pubsub = ["google-cloud-pubsub>=2.28"]
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+include = ["diya_core*"]

@@ -1,204 +1,153 @@
 """
 DIYA Agent Service
-ADK-based agent orchestration for department agents, coordinator, and notice agent.
-Exposes HTTP endpoints for triggering agent workflows.
+
+Describes the agent fleet and hosts the ADK orchestration.
+
+Phase 2 status: the deterministic conflict detector lives in
+`diya_core.conflict` and is driven by the gateway (POST /api/conflicts/detect).
+The ADK Department/Coordinator/Notice agents land in Phase 3 and will call that
+same module as tools, so the reasoning trace stays grounded in real arithmetic.
+
+The orchestration endpoints below therefore return 501 rather than fabricated
+success payloads — a stub that lies about having run an agent is worse than one
+that says it has not been built yet.
 """
+
+from __future__ import annotations
+
+import os
+from typing import Optional
 
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
-from typing import Optional
-from datetime import datetime
 
-app = FastAPI(title="DIYA Agent Service", version="1.0.0")
+from diya_core.models import utcnow_iso
+from diya_core.seed import load_seed
+
+app = FastAPI(
+    title="DIYA Agent Service",
+    description="ADK agent fleet — orchestration lands in Phase 3",
+    version="2.0.0",
+)
+
+ALLOWED_ORIGINS = [
+    o.strip() for o in os.environ.get("CORS_ORIGINS", "http://localhost:3000").split(",")
+]
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
-    allow_methods=["*"],
+    allow_origins=ALLOWED_ORIGINS,
+    allow_credentials=True,
+    allow_methods=["GET", "POST"],
     allow_headers=["*"],
 )
 
+GATEWAY_URL = os.environ.get("GATEWAY_URL", "http://localhost:8000")
+MAX_TURNS = int(os.environ.get("AGENT_MAX_TURNS", 10))
 
-# ── Models ───────────────────────────────────────────────────────
+PHASE_3_DETAIL = (
+    "ADK agent orchestration is Phase 3. The deterministic detector is live at "
+    f"POST {GATEWAY_URL}/api/conflicts/detect and produces the same conflict "
+    "records and reasoning traces this endpoint will return once wired to ADK."
+)
+
 
 class IngestRequest(BaseModel):
     dept_id: str
     feed_source: Optional[str] = None
 
 
-class DetectionResult(BaseModel):
-    status: str
-    conflicts_found: int
-    message: str
-    trace_id: Optional[str] = None
-
-
 class ResolutionRequest(BaseModel):
     conflict_id: str
     strategy: str = "consolidated"
-    max_turns: int = 5
+    max_turns: int = MAX_TURNS
 
-
-# ── Routes ───────────────────────────────────────────────────────
 
 @app.get("/")
 async def root():
-    return {"service": "DIYA Agent Service", "status": "operational"}
+    return {"service": "DIYA Agent Service", "status": "operational", "version": "2.0.0"}
 
 
 @app.get("/health")
 async def health():
-    return {"status": "healthy", "agents": {"department": 4, "coordinator": 1, "notice": 1}}
+    return {
+        "status": "healthy",
+        "adk_wired": False,
+        "phase": "2 — fleet described, orchestration pending",
+    }
 
 
 @app.get("/agents/status")
 async def agents_status():
-    """Return current status of all agents."""
+    """
+    The agent fleet, derived from the seeded departments.
+
+    One Department Agent per department, each with its own Agent Identity, plus
+    the Coordinator and the Citizen Notice Agent (PRD §6).
+    """
+    seed = load_seed()
+
+    agents = [
+        {
+            "name": f"{d.shortName} Department Agent",
+            "type": "department",
+            "identityId": d.agentIdentityId,
+            "scope": f"departments/{d.id}/**",
+            "crossDepartmentRead": False,
+            "status": "online",
+            "recordsInScope": d.activeWorks,
+            "adkWired": False,
+        }
+        for d in seed.departments
+    ]
+
+    agents.append({
+        "name": "Coordinator Agent",
+        "type": "coordinator",
+        "identityId": "agent-identity-coordinator-001",
+        "scope": "departments/**",
+        # The single elevated identity in the system — PRD §6.2.
+        "crossDepartmentRead": True,
+        "status": "online",
+        "recordsInScope": len(seed.works),
+        "maxTurns": MAX_TURNS,
+        "adkWired": False,
+    })
+    agents.append({
+        "name": "Citizen Notice Agent",
+        "type": "notice",
+        "identityId": "agent-identity-notice-001",
+        "scope": "conflicts/**:read, notices/**:write",
+        "crossDepartmentRead": False,
+        "status": "online",
+        "adkWired": False,
+    })
+
     return {
-        "agents": [
-            {"name": "Roads Department Agent", "type": "department", "status": "online", "last_run": "2026-08-20T10:00:00Z", "records_processed": 3},
-            {"name": "Water Department Agent", "type": "department", "status": "online", "last_run": "2026-08-20T10:05:00Z", "records_processed": 2},
-            {"name": "Telecom Department Agent", "type": "department", "status": "online", "last_run": "2026-08-20T10:08:00Z", "records_processed": 2},
-            {"name": "Sewage Department Agent", "type": "department", "status": "online", "last_run": "2026-08-20T10:10:00Z", "records_processed": 1},
-            {"name": "Coordinator Agent", "type": "coordinator", "status": "online", "last_run": "2026-08-20T10:30:00Z", "conflicts_detected": 2},
-            {"name": "Citizen Notice Agent", "type": "notice", "status": "online", "last_run": "2026-08-20T09:15:00Z", "notices_generated": 1},
-        ]
+        "agents": agents,
+        "count": len(agents),
+        "timestamp": utcnow_iso(),
+        "orchestration": "pending-phase-3",
     }
 
 
 @app.post("/agents/department/ingest")
 async def ingest_department_feed(request: IngestRequest):
-    """
-    Trigger a department agent to normalize raw feed data.
-    TODO Phase 3: Implement ADK Department Agent with Gemini 3.5 Flash.
-    """
-    return {
-        "dept_id": request.dept_id,
-        "status": "completed",
-        "records_normalized": 3,
-        "timestamp": datetime.utcnow().isoformat(),
-        "agent": f"{request.dept_id}-agent",
-        "message": f"Department agent ingested feed for {request.dept_id}",
-    }
+    raise HTTPException(status_code=501, detail=PHASE_3_DETAIL)
 
 
-@app.post("/agents/coordinator/detect", response_model=DetectionResult)
+@app.post("/agents/coordinator/detect")
 async def detect_conflicts():
-    """
-    Trigger coordinator agent to scan for cross-department conflicts.
-    TODO Phase 3: Implement ADK Coordinator Agent with Memory Bank.
-    """
-    return DetectionResult(
-        status="completed",
-        conflicts_found=2,
-        message="Coordinator agent completed conflict scan. 2 conflicts detected.",
-        trace_id="trace-001",
-    )
+    raise HTTPException(status_code=501, detail=PHASE_3_DETAIL)
 
 
 @app.post("/agents/coordinator/resolve")
 async def resolve_conflict(request: ResolutionRequest):
-    """
-    Trigger coordinator agent to propose resolution for a specific conflict.
-    Includes max-turn cap to prevent runaway agent loops (Red Flag #9).
-    """
-    return {
-        "conflict_id": request.conflict_id,
-        "status": "resolved",
-        "strategy": request.strategy,
-        "turns_used": 3,
-        "max_turns": request.max_turns,
-        "proposed_window": {"start": "2026-09-15", "end": "2026-12-15"},
-        "savings_estimate": 32000000,
-        "trace_id": f"trace-resolve-{request.conflict_id}",
-        "message": "Conflict resolved with consolidated work window.",
-    }
-
-
-@app.get("/agents/traces/{trace_id}")
-async def get_reasoning_trace(trace_id: str):
-    """Retrieve reasoning trace for an agent run."""
-    return {
-        "trace_id": trace_id,
-        "agent": "Coordinator Agent",
-        "conflict_id": "conf-001",
-        "started_at": "2026-08-20T10:30:00Z",
-        "completed_at": "2026-08-20T10:30:09Z",
-        "total_duration_ms": 8750,
-        "steps": [
-            {
-                "step": 1,
-                "action": "Spatial Scan",
-                "reasoning": "Scanning all planned_works for geofence intersection. Threshold: 50m overlap.",
-                "result": "Found 4 records within 200m on wayId: way-48213001 (SV Road)",
-                "duration_ms": 1200,
-            },
-            {
-                "step": 2,
-                "action": "Temporal Analysis",
-                "reasoning": "Checking date window overlaps for spatially co-located works.",
-                "result": "All 4 overlap between Oct 1-20, 2026. Full span: Sep 15 - Dec 15.",
-                "duration_ms": 800,
-            },
-            {
-                "step": 3,
-                "action": "Dependency Graph",
-                "reasoning": "Underground utilities must complete before surface work.",
-                "result": "Optimal: storm drain -> water main -> OFC -> resurfacing",
-                "duration_ms": 2100,
-            },
-            {
-                "step": 4,
-                "action": "Window Calculation",
-                "reasoning": "Calculating consolidated window with buffer days.",
-                "result": "Proposed: Storm drain (Sep 15-Oct 15) -> Water (Oct 10-Nov 10) -> OFC (Oct 25-Nov 15) -> Resurfacing (Nov 15-Dec 15)",
-                "duration_ms": 1500,
-            },
-            {
-                "step": 5,
-                "action": "Savings Estimation",
-                "reasoning": "Shared traffic management, single mobilization, reduced restoration.",
-                "result": "Estimated savings: Rs 3.2 Crore. Disruption: 4 closures -> 1.",
-                "duration_ms": 1150,
-            },
-        ],
-        "outcome": "CRITICAL conflict detected. 4-department consolidated window proposed. Awaiting acknowledgment.",
-        "memory_bank": {
-            "stored": True,
-            "key": "conf-001-resolution",
-            "expires": None,
-        },
-    }
-
-
-@app.post("/agents/identity/verify")
-async def verify_identity(agent_id: str, resource_path: str):
-    """
-    Demo endpoint for Agent Identity scope verification.
-    Shows cross-department read denial.
-    """
-    # Parse agent department from ID
-    agent_dept = agent_id.split("-")[2] if len(agent_id.split("-")) > 2 else "unknown"
-    resource_dept = resource_path.split("/")[1] if "/" in resource_path else "unknown"
-
-    if agent_dept == resource_dept or agent_id.startswith("agent-identity-coordinator"):
-        return {
-            "agent_id": agent_id,
-            "resource": resource_path,
-            "access": "GRANTED",
-            "scope": f"departments/{resource_dept}/planned_works/*",
-        }
-
-    return {
-        "agent_id": agent_id,
-        "resource": resource_path,
-        "access": "DENIED",
-        "reason": f"Agent {agent_id} does not have read scope for {resource_path}",
-        "allowed_scope": f"departments/dept-{agent_dept}/planned_works/*",
-    }
+    raise HTTPException(status_code=501, detail=PHASE_3_DETAIL)
 
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=8002)
+
+    uvicorn.run(app, host="0.0.0.0", port=int(os.environ.get("PORT", 8002)))
