@@ -7,3 +7,7 @@ pydantic==2.10.4
 httpx==0.28.1
 google-cloud-firestore==2.19.0
 google-cloud-pubsub==2.28.0
+# Optional: Cloud Trace export (OTEL_EXPORT=cloudtrace). The gateway keeps its
+# in-memory trace buffer either way, so this is not required to run.
+# opentelemetry-sdk==1.29.0
+# opentelemetry-exporter-gcp-trace==1.9.0

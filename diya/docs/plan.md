@@ -102,13 +102,26 @@ Not yet done, and needing a GCP project rather than more code: deploying the
 fleet to Agent Runtime, and pointing `MEMORY_BANK` at a real Vertex Agent
 Engine instead of the local file.
 
-### Phase 4: Governance & Security (Day 8-9)
-- [ ] Agent Identity scoping per department
-- [ ] Agent Gateway configuration
-- [ ] Model Armor on citizen input surface
-- [ ] Agent Observability / Cloud Trace
-- [ ] Agent Registry configuration
-- [ ] Cross-department read denial demo
+### Phase 4: Governance & Security (Day 8-9) — complete
+- [x] Agent Identity scoping per department — one parser, department and functional scopes, checked on every tool call
+- [x] Agent Gateway configuration — rate limit, timeout and circuit breaker, **enforced** on real traffic
+- [x] Model Armor on citizen input surface — 13 anchored patterns, redacting rather than discarding
+- [x] Agent Observability — span trees with real timings, `X-Trace-Id` on every response, optional Cloud Trace export
+- [x] Agent Registry — declared fleet reconciled against the running agents, drift reported
+- [x] Cross-department read denial demo — `agent-identity-water-001` reading `departments/**` is refused and logged
+
+**The correction this phase made.** Phase 2 published rate limit, timeout and
+circuit-breaker numbers on `/api/governance/stats` while enforcing none of them.
+Advertising a policy you do not apply is worse than having none: it invites
+"so what happens at 101 requests?" with no answer. All three are now real, and
+that endpoint reports live enforcement state — tracked callers, throttle count,
+per-upstream breaker state — rather than echoing environment variables.
+
+Both on-camera governance moments (PRD red flag #7) are reproducible from the
+API: a denied cross-department read, and a blocked prompt injection.
+
+Still needing a GCP project rather than code: pointing `OTEL_EXPORT=cloudtrace`
+at a real project, and registering the fleet with the managed Agent Registry.
 
 ### Phase 5: Integration & Polish (Day 10-11)
 - [ ] End-to-end integration testing

@@ -24,7 +24,12 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import Response, StreamingResponse
 from pydantic import BaseModel, Field
 
+import gateway_policy
 import governance
+import observability
+import registry
+from gateway_policy import CircuitOpen
+from observability import tracer
 from diya_core.conflict import DetectionConfig
 from diya_core.events import event_bus
 from diya_core.models import (
@@ -82,6 +87,73 @@ app.add_middleware(
 )
 
 
+# ── Agent Gateway middleware ─────────────────────────────────────
+
+# The surface agents and untrusted callers reach. Read-only browsing by the
+# dashboard is not rate limited — throttling a coordinator's page refresh buys
+# nothing, while the agent and citizen surfaces are where a runaway loop or an
+# abusive client actually shows up.
+_POLICED_PREFIXES = (
+    "/api/complaints",
+    "/api/conflicts/detect",
+    "/api/ingest",
+    "/api/governance",
+)
+
+
+def _caller_of(request: Request) -> str:
+    """
+    Who to bill this request to.
+
+    An explicit agent identity wins, so one looping agent is throttled without
+    affecting the rest of the fleet. Otherwise fall back to the peer address.
+    """
+    identity = request.headers.get("x-agent-identity") or request.query_params.get("agent_id")
+    if identity:
+        return identity.strip().lower()
+    return request.client.host if request.client else "unknown"
+
+
+@app.middleware("http")
+async def agent_gateway(request: Request, call_next):
+    """Trace every request; rate limit the agent-facing and citizen surfaces."""
+    path = request.url.path
+
+    if request.method != "OPTIONS" and path.startswith(_POLICED_PREFIXES):
+        caller = _caller_of(request)
+        allowed, retry_after = await gateway_policy.rate_limiter.check(caller)
+        if not allowed:
+            await _record(
+                "Agent Gateway", "governance", "Rate Limit",
+                f"THROTTLED {caller} on {path}: over "
+                f"{gateway_policy.RATE_LIMIT_PER_MIN}/min. Retry in {retry_after}s.",
+                status="blocked",
+            )
+            return Response(
+                content=json.dumps({
+                    "detail": (
+                        f"Rate limit of {gateway_policy.RATE_LIMIT_PER_MIN}/min exceeded "
+                        f"for {caller}."
+                    ),
+                    "retryAfter": retry_after,
+                }),
+                status_code=429,
+                media_type="application/json",
+                headers={"Retry-After": str(max(1, int(retry_after)))},
+            )
+
+    with tracer.span(f"{request.method} {path}", kind="server") as span:
+        span.set(method=request.method, path=path, caller=_caller_of(request))
+        response = await call_next(request)
+        span.set(status=response.status_code)
+        if response.status_code >= 500:
+            span.status = "error"
+        # Hand the trace id back so a caller can pull the span tree for the
+        # exact request it just made.
+        response.headers["X-Trace-Id"] = span.traceId
+        return response
+
+
 # ── Request models ───────────────────────────────────────────────
 
 class ResolveRequest(BaseModel):
@@ -124,38 +196,69 @@ async def _record(
     return activity
 
 
-async def _service_get(base: str, path: str, **params) -> Any:
+_SERVICE_NAMES = {
+    MESH_SERVICE_URL: "mesh-service",
+    AGENT_SERVICE_URL: "agent-service",
+    NOTICE_SERVICE_URL: "notice-service",
+}
+
+
+async def _call_upstream(
+    method: str, base: str, path: str, raw: bool = False, **kwargs
+) -> Any:
+    """
+    Every upstream call goes through the breaker and the timeout.
+
+    A 4xx from a healthy service is a *caller* error, not an upstream failure —
+    counting it toward the breaker would let one bad request id trip the circuit
+    for everyone. Only transport errors and 5xx count against it.
+    """
     assert http_client is not None
-    try:
-        response = await http_client.get(f"{base}{path}", params=params or None)
-        response.raise_for_status()
-        return response.json()
-    except httpx.HTTPStatusError as exc:
+    service = _SERVICE_NAMES.get(base, base)
+    breaker = gateway_policy.breaker_for(service)
+
+    if not breaker.allows():
         raise HTTPException(
-            status_code=exc.response.status_code,
-            detail=f"Upstream {base}{path}: {exc.response.text[:200]}",
-        ) from exc
-    except httpx.HTTPError as exc:
-        raise HTTPException(
-            status_code=503, detail=f"Upstream {base}{path} unreachable: {exc}"
-        ) from exc
+            status_code=503,
+            detail=str(CircuitOpen(breaker)),
+            headers={"Retry-After": str(int(breaker.retry_after()) or 1)},
+        )
+
+    with tracer.span(f"upstream.{service}", kind="client") as span:
+        span.set(method=method, path=path, breaker=breaker.state)
+        try:
+            response = await http_client.request(
+                method, f"{base}{path}", timeout=gateway_policy.TIMEOUT_SECONDS, **kwargs
+            )
+        except httpx.HTTPError as exc:
+            breaker.record_failure()
+            raise HTTPException(
+                status_code=503, detail=f"Upstream {base}{path} unreachable: {exc}"
+            ) from exc
+
+        span.set(status=response.status_code)
+        if response.status_code >= 500:
+            breaker.record_failure()
+            raise HTTPException(
+                status_code=response.status_code,
+                detail=f"Upstream {base}{path}: {response.text[:200]}",
+            )
+
+        breaker.record_success()
+        if response.status_code >= 400:
+            raise HTTPException(
+                status_code=response.status_code,
+                detail=f"Upstream {base}{path}: {response.text[:200]}",
+            )
+        return response if raw else response.json()
+
+
+async def _service_get(base: str, path: str, **params) -> Any:
+    return await _call_upstream("GET", base, path, params=params or None)
 
 
 async def _service_post(base: str, path: str, payload: dict) -> Any:
-    assert http_client is not None
-    try:
-        response = await http_client.post(f"{base}{path}", json=payload)
-        response.raise_for_status()
-        return response.json()
-    except httpx.HTTPStatusError as exc:
-        raise HTTPException(
-            status_code=exc.response.status_code,
-            detail=f"Upstream {base}{path}: {exc.response.text[:200]}",
-        ) from exc
-    except httpx.HTTPError as exc:
-        raise HTTPException(
-            status_code=503, detail=f"Upstream {base}{path} unreachable: {exc}"
-        ) from exc
+    return await _call_upstream("POST", base, path, json=payload)
 
 
 # ── Health ───────────────────────────────────────────────────────
@@ -453,18 +556,11 @@ async def download_artifact(notice_id: str, artifact: str):
     if artifact not in ("pdf", "ics"):
         raise HTTPException(status_code=404, detail="Expected 'pdf' or 'ics'")
 
-    assert http_client is not None
-    try:
-        upstream = await http_client.get(
-            f"{NOTICE_SERVICE_URL}/notices/{notice_id}/{artifact}"
-        )
-        upstream.raise_for_status()
-    except httpx.HTTPStatusError as exc:
-        raise HTTPException(
-            status_code=exc.response.status_code, detail="Artifact not available"
-        ) from exc
-    except httpx.HTTPError as exc:
-        raise HTTPException(status_code=503, detail=f"Notice service unreachable: {exc}") from exc
+    # Through the breaker like every other upstream call — an artifact download
+    # against a dead notice service must fail fast too, not hang per request.
+    upstream = await _call_upstream(
+        "GET", NOTICE_SERVICE_URL, f"/notices/{notice_id}/{artifact}", raw=True
+    )
 
     media = "application/pdf" if artifact == "pdf" else "text/calendar"
     disposition = "inline" if artifact == "pdf" else "attachment"
@@ -599,6 +695,7 @@ async def governance_stats():
     activities = await repository.list_activities(agent_type="governance", limit=500)
     identity = [a for a in activities if a.action == "Scope Check"]
     armor = [a for a in activities if a.action == "Input Screening"]
+    throttled = [a for a in activities if a.action == "Rate Limit"]
 
     return {
         "identity_checks": {
@@ -611,14 +708,77 @@ async def governance_stats():
             "blocked": sum(1 for a in armor if a.status == "blocked"),
             "passed": sum(1 for a in armor if a.status == "success"),
         },
+        "rate_limit": {
+            "throttled": len(throttled),
+            "recent": [a.detail for a in throttled[:5]],
+        },
+        # Phase 2 reported these as configuration. They are now enforced, and
+        # this block is the live state of the enforcement — including how many
+        # callers are being tracked and whether any breaker has tripped.
         "runtime": {
             "max_turns": int(os.environ.get("AGENT_MAX_TURNS", 10)),
-            "timeout_seconds": int(os.environ.get("AGENT_TIMEOUT_SECONDS", 30)),
-            "rate_limit_per_min": int(os.environ.get("AGENT_RATE_LIMIT", 100)),
-            "circuit_breaker_threshold": int(os.environ.get("AGENT_CIRCUIT_BREAKER", 5)),
+            **gateway_policy.policy_snapshot(),
         },
+        "observability": tracer.stats(),
         "armor_patterns": len(governance.ARMOR_PATTERNS),
         "cross_department_scopes": sorted(governance.CROSS_DEPARTMENT_SCOPES),
+        "functional_scopes": {
+            scope: {c: sorted(a) for c, a in grants.items()}
+            for scope, grants in governance.FUNCTIONAL_SCOPES.items()
+        },
+    }
+
+
+# ── Agent Observability (PRD §10) ────────────────────────────────
+
+@app.get("/api/observability/traces")
+async def list_traces(limit: int = Query(20, ge=1, le=200)):
+    """Recent request traces, newest first."""
+    return {
+        "traces": tracer.recent(limit),
+        "stats": tracer.stats(),
+    }
+
+
+@app.get("/api/observability/traces/{trace_id}")
+async def get_trace(trace_id: str):
+    """
+    The full span tree for one request.
+
+    Every response carries its own id in `X-Trace-Id`, so "why did that call
+    take four seconds" is answerable for the exact request that did it.
+    """
+    trace = tracer.trace(trace_id)
+    if not trace:
+        raise HTTPException(
+            status_code=404,
+            detail=f"No trace {trace_id}. The buffer holds the last "
+                   f"{tracer.stats()['capacity']} traces.",
+        )
+    return trace
+
+
+# ── Agent Registry (PRD §9) ──────────────────────────────────────
+
+@app.get("/api/registry")
+async def agent_registry():
+    """
+    The registered fleet, reconciled against the agents actually running.
+
+    A register nobody checks drifts and then misleads, so this reports the
+    difference rather than just listing what it was told.
+    """
+    try:
+        topology = await _service_get(AGENT_SERVICE_URL, "/agents/topology")
+    except HTTPException:
+        topology = None
+
+    return {
+        "agents": registry.register(),
+        "count": len(registry.register()),
+        "version": registry.REGISTRY_VERSION,
+        "deployment": registry.DEPLOYMENT_TARGET,
+        "reconciliation": registry.reconcile(topology),
     }
 
 

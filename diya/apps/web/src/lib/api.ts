@@ -177,6 +177,26 @@ export async function fetchGovernanceStats() {
   return apiFetch<any>('/api/governance/stats');
 }
 
+// ── Observability & Registry (Phase 4) ──────────────────────────
+
+/** Recent request traces, newest first. */
+export async function fetchTraces(limit = 20) {
+  return apiFetch<any>(`/api/observability/traces?limit=${limit}`);
+}
+
+/**
+ * The span tree for one request. Every gateway response carries its own id in
+ * the `X-Trace-Id` header, so a call can be looked up by the exact request.
+ */
+export async function fetchTrace(traceId: string) {
+  return apiFetch<any>(`/api/observability/traces/${traceId}`);
+}
+
+/** The registered fleet, reconciled against the agents actually running. */
+export async function fetchRegistry() {
+  return apiFetch<any>('/api/registry');
+}
+
 // ── SSE Event Stream ────────────────────────────────────────────
 
 export function subscribeToEvents(

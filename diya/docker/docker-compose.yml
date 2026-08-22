@@ -36,6 +36,18 @@ services:
       - GOOGLE_CLOUD_PROJECT=${GOOGLE_CLOUD_PROJECT:-diya-demo}
       - PUBSUB_TOPIC_FEED=${PUBSUB_TOPIC_FEED:-diya-department-feed}
       - PUBSUB_TOPIC_DLQ=${PUBSUB_TOPIC_DLQ:-diya-department-feed-dlq}
+      # Agent Gateway policy — enforced, not merely reported.
+      - AGENT_RATE_LIMIT=${AGENT_RATE_LIMIT:-100}
+      - AGENT_TIMEOUT_SECONDS=${AGENT_TIMEOUT_SECONDS:-30}
+      - AGENT_CIRCUIT_BREAKER=${AGENT_CIRCUIT_BREAKER:-5}
+      - AGENT_CIRCUIT_COOLDOWN=${AGENT_CIRCUIT_COOLDOWN:-30}
+      # Agent Observability. OTEL_EXPORT=cloudtrace also needs a real project
+      # and the opentelemetry-exporter-gcp-trace extra.
+      - TRACE_BUFFER=${TRACE_BUFFER:-200}
+      - OTEL_EXPORT=${OTEL_EXPORT:-}
+      # Agent Registry
+      - AGENT_REGISTRY_VERSION=${AGENT_REGISTRY_VERSION:-3.0.0}
+      - AGENT_DEPLOYMENT=${AGENT_DEPLOYMENT:-docker-compose}
     depends_on:
       - mesh-service
       - agent-service

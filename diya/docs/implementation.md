@@ -336,6 +336,69 @@ without credentials.
 
 ---
 
+### 8d. Governance & Security — Phase 4
+
+**What:** three new modules in `apps/api-gateway/` — `gateway_policy.py`,
+`observability.py`, `registry.py` — plus the middleware and routes that apply
+them.
+
+**Agent Gateway (`gateway_policy.py`).** Phase 2 reported a rate limit, a
+timeout and a circuit-breaker threshold on `/api/governance/stats` and enforced
+none of them. Now:
+- **Rate limiting** is a token bucket keyed by calling identity
+  (`X-Agent-Identity`, else `agent_id`, else peer address), so a burst is
+  allowed but a sustained flood is not, and one looping agent is throttled
+  without affecting the rest of the fleet. Applied to the agent-facing and
+  citizen surfaces only — throttling a coordinator's dashboard refresh buys
+  nothing.
+- **Circuit breakers**, one per upstream, closed → open → half-open. A 4xx from
+  a healthy service does *not* count toward the breaker; only transport errors
+  and 5xx do, otherwise one bad request id would trip the circuit for everyone.
+- **Timeouts** on every upstream call.
+
+State is per-process, which is honest for one replica; behind a load balancer
+the limits would be per-replica rather than global, and that is noted in the
+module.
+
+**Agent Observability (`observability.py`).** A span tree per request — id,
+parent, name, attributes, duration, status — in a bounded ring buffer, with
+optional Cloud Trace export under `OTEL_EXPORT=cloudtrace`. The buffer is the
+primary surface either way, because Cloud Trace is unreachable in the offline
+demo and an observability story that only works with credentials is not one.
+Every response carries `X-Trace-Id`, so a specific slow call can be looked up
+by the exact request that made it. Bounded on purpose: an unbounded trace
+buffer in a long-running gateway is a memory leak with a nice name.
+
+**Agent Registry (`registry.py`).** The register is derived from the same seed
+the fleet is built from, then **reconciled against the running agent-service**.
+`GET /api/registry` reports `in_sync`, `drift` (naming what is only in one
+side), or `unknown` when the fleet cannot be reached — never agreement, because
+"I could not check" and "they match" are different answers and only one is
+reassuring.
+
+**One bug found by testing:** the artifact download route called the notice
+service directly, bypassing the breaker — so with the notice service dead, every
+PDF request still hung for ~2.6s instead of failing fast. It now goes through
+`_call_upstream` like everything else.
+
+**Verified against real traffic:**
+- Rate limit at 5/min: `200 200 200 200 200 429 429 429` for one identity, while
+  a second identity and the unpoliced dashboard reads both stayed 200.
+- Circuit breaker at threshold 3 with the notice service killed: three ~2.6s
+  failures, then fail-fast at ~305ms, breaker `open` with `trips: 1`. After the
+  cooldown it admitted exactly one probe, which re-opened it while the service
+  was still down, then closed cleanly once the service returned.
+- Traces: a resolve request produced a two-span tree —
+  `POST /api/conflicts/conf-001/resolve` 286.96ms with a nested
+  `upstream.notice-service` 284.3ms child, which is the "where did the time go"
+  answer.
+- Registry: `in_sync` against the live ADK tree; `unknown` with agent-service
+  down; and against a doctored topology it correctly reported
+  `registeredButNotRunning: [sewage_department_agent]` and
+  `runningButNotRegistered: [ghost_department_agent]`.
+
+---
+
 ### 9. API Integration Layer — Phase 3
 **What:** Centralized API client, data fetching hooks, loading skeletons, toast notifications, settings page, Terraform IaC, and development scripts.
 
