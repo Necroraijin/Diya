@@ -1,11 +1,16 @@
+# Build context is the repo root (diya/) — see Dockerfile.api-gateway.
 FROM python:3.12-slim
 
 WORKDIR /app
 
-COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
+COPY packages/core-py /opt/diya-core
+COPY apps/agent-service/requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt && \
+    pip install --no-cache-dir /opt/diya-core
 
-COPY . .
+COPY apps/agent-service/ .
+COPY data/synthetic /app/data/synthetic
+ENV DIYA_DATA_DIR=/app/data/synthetic
 
 EXPOSE 8002
 

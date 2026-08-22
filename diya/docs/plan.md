@@ -61,13 +61,21 @@ diya/
 - [x] Docker configuration for all services
 - [x] Synthetic data generation (Mumbai + Delhi)
 
-### Phase 2: Backend Services (Day 3-4)
-- [ ] FastAPI gateway with all endpoints
-- [ ] Firestore schema and connection
-- [ ] Pub/Sub topic setup and ingestion pipeline
-- [ ] Mesh service: OSM data fetch, spatial processing
-- [ ] Notice service: PDF/ICS generation
-- [ ] SSE/WebSocket real-time updates
+### Phase 2: Backend Services (Day 3-4) — complete
+- [x] FastAPI gateway with all endpoints (26 routes, repository-backed)
+- [x] Firestore schema and connection (`FirestoreRepository`, degrades to memory)
+- [x] Pub/Sub topic setup and ingestion pipeline (`POST /api/ingest/{dept_id}`, DLQ, local no-op publisher)
+- [x] Mesh service: OSM data fetch, spatial processing (Overpass + disk cache + bundled fallback; shapely areas in real m²)
+- [x] Notice service: PDF/ICS generation (ReportLab + icalendar, GCS-or-local storage)
+- [x] SSE real-time updates (`/api/events`, backed by a real domain event bus)
+
+Also landed in this phase, because nothing above worked without it:
+- [x] `packages/core-py` (`diya-core`) — shared models, geo maths, seed loader, event bus, repositories, Pub/Sub
+- [x] **Deterministic conflict detection** (`diya_core.conflict`) — geofence penetration + date-overlap + union-find grouping + depth-ordered consolidation. It independently rediscovers both hand-authored seeded conflicts.
+- [x] Governance consolidated into one module (identity scoping was previously implemented twice with disagreeing parsers)
+
+WebSocket was not built: SSE covers every push the UI needs and the browser
+never writes upstream over the same channel.
 
 ### Phase 3: Agent Layer (Day 5-7)
 - [ ] ADK agent scaffolding

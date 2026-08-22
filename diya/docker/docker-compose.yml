@@ -1,5 +1,5 @@
-version: '3.8'
-
+# All Python services build from the repo root (diya/) so they can install the
+# shared packages/core-py package and copy data/synthetic into the image.
 services:
   # ── Frontend ────────────────────────────────────────────────────
   web:
@@ -9,7 +9,7 @@ services:
     ports:
       - "3000:3000"
     environment:
-      - NEXT_PUBLIC_API_URL=http://api-gateway:8000
+      - NEXT_PUBLIC_API_URL=http://localhost:8000
     depends_on:
       - api-gateway
     networks:
@@ -18,15 +18,24 @@ services:
   # ── API Gateway ─────────────────────────────────────────────────
   api-gateway:
     build:
-      context: ../apps/api-gateway
-      dockerfile: ../../docker/Dockerfile.api-gateway
+      context: ..
+      dockerfile: docker/Dockerfile.api-gateway
     ports:
       - "8000:8000"
     environment:
+      - PORT=8000
       - MESH_SERVICE_URL=http://mesh-service:8001
       - AGENT_SERVICE_URL=http://agent-service:8002
       - NOTICE_SERVICE_URL=http://notice-service:8003
-      - FIRESTORE_EMULATOR_HOST=firestore:8080
+      # Enumerated origins: allow_credentials=True forbids a "*" wildcard.
+      - CORS_ORIGINS=http://localhost:3000,http://127.0.0.1:3000
+      # `memory` runs the whole demo with no cloud dependency; set `firestore`
+      # (plus GOOGLE_CLOUD_PROJECT) to persist. Firestore failures degrade to
+      # memory rather than taking the gateway down.
+      - DIYA_STORE=${DIYA_STORE:-memory}
+      - GOOGLE_CLOUD_PROJECT=${GOOGLE_CLOUD_PROJECT:-diya-demo}
+      - PUBSUB_TOPIC_FEED=${PUBSUB_TOPIC_FEED:-diya-department-feed}
+      - PUBSUB_TOPIC_DLQ=${PUBSUB_TOPIC_DLQ:-diya-department-feed-dlq}
     depends_on:
       - mesh-service
       - agent-service
@@ -37,24 +46,33 @@ services:
   # ── Mesh Service ────────────────────────────────────────────────
   mesh-service:
     build:
-      context: ../apps/mesh-service
-      dockerfile: ../../docker/Dockerfile.mesh-service
+      context: ..
+      dockerfile: docker/Dockerfile.mesh-service
     ports:
       - "8001:8001"
     environment:
       - PORT=8001
+      - CORS_ORIGINS=http://localhost:3000,http://127.0.0.1:3000
+      - OVERPASS_URL=${OVERPASS_URL:-https://overpass-api.de/api/interpreter}
+      - OSM_CACHE_DIR=/app/cache
+      - OSM_CACHE_TTL=${OSM_CACHE_TTL:-604800}
+    volumes:
+      - osm-cache:/app/cache
     networks:
       - diya-network
 
   # ── Agent Service ───────────────────────────────────────────────
   agent-service:
     build:
-      context: ../apps/agent-service
-      dockerfile: ../../docker/Dockerfile.agent-service
+      context: ..
+      dockerfile: docker/Dockerfile.agent-service
     ports:
       - "8002:8002"
     environment:
       - PORT=8002
+      - CORS_ORIGINS=http://localhost:3000,http://127.0.0.1:3000
+      - GATEWAY_URL=http://api-gateway:8000
+      - AGENT_MAX_TURNS=${AGENT_MAX_TURNS:-10}
       - GOOGLE_CLOUD_PROJECT=${GOOGLE_CLOUD_PROJECT:-diya-demo}
       - VERTEX_AI_LOCATION=${VERTEX_AI_LOCATION:-us-central1}
     networks:
@@ -63,12 +81,16 @@ services:
   # ── Notice Service ──────────────────────────────────────────────
   notice-service:
     build:
-      context: ../apps/notice-service
-      dockerfile: ../../docker/Dockerfile.notice-service
+      context: ..
+      dockerfile: docker/Dockerfile.notice-service
     ports:
       - "8003:8003"
     environment:
       - PORT=8003
+      - CORS_ORIGINS=http://localhost:3000,http://127.0.0.1:3000
+      - OUTPUT_DIR=/app/output
+      # Unset => artifacts land on the local volume below.
+      - GCS_BUCKET=${GCS_BUCKET:-}
     volumes:
       - notice-storage:/app/output
     networks:
@@ -80,3 +102,4 @@ networks:
 
 volumes:
   notice-storage:
+  osm-cache:

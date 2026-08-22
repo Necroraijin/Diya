@@ -1,11 +1,16 @@
+# Build context is the repo root (diya/) so every service shares one context.
+# The mesh service does not import diya_core — its geometry is self-contained.
 FROM python:3.12-slim
 
 WORKDIR /app
 
-COPY requirements.txt .
+COPY apps/mesh-service/requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-COPY . .
+COPY apps/mesh-service/ .
+
+RUN mkdir -p /app/cache
+ENV OSM_CACHE_DIR=/app/cache
 
 EXPOSE 8001
 

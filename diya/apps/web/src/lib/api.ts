@@ -1,11 +1,13 @@
 /**
  * DIYA API Client
  * Centralized API layer for all backend communication.
- * Currently uses mock data; swap USE_MOCK=false + set API_URL to connect to real backend.
+ *
+ * Every function here hits the live gateway. `USE_MOCK` used to sit at the top
+ * of this file but was never read by anything — pages import from mock-data.ts
+ * directly. Wiring the pages to these functions is Phase 5.
  */
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
-const USE_MOCK = true; // Flip to false when backend is connected
 
 // ── Generic fetch wrapper ───────────────────────────────────────
 
@@ -73,16 +75,44 @@ export async function resolveConflict(
   });
 }
 
+/** Re-run deterministic detection over every planned work. */
+export async function detectConflicts(city?: string) {
+  return apiFetch<any>(`/api/conflicts/detect${city ? `?city=${city}` : ''}`, {
+    method: 'POST',
+  });
+}
+
 // ── Mesh API ────────────────────────────────────────────────────
 
 export async function fetchMeshData(city: string) {
   return apiFetch<any>(`/api/mesh/${city}`);
 }
 
+/** Dissolved GeoJSON polygons for the overlapping geofences in a city. */
+export async function fetchConflictZones(city: string) {
+  return apiFetch<any>(`/api/mesh/${city}/conflict-zones`);
+}
+
+export async function fetchCities() {
+  return apiFetch<{ cities: any[] }>('/api/cities');
+}
+
 // ── Notices API ─────────────────────────────────────────────────
 
 export async function fetchNotices() {
   return apiFetch<{ notices: any[]; count: number }>('/api/notices');
+}
+
+export async function fetchNotice(noticeId: string) {
+  return apiFetch<any>(`/api/notices/${noticeId}`);
+}
+
+/**
+ * Direct link to a generated artifact. The gateway streams these back from the
+ * notice service, so they are plain hrefs rather than fetch calls.
+ */
+export function noticeArtifactUrl(noticeId: string, artifact: 'pdf' | 'ics') {
+  return `${API_URL}/api/notices/${noticeId}/${artifact}`;
 }
 
 // ── Agent API ───────────────────────────────────────────────────
@@ -118,6 +148,33 @@ export async function submitComplaint(data: {
     method: 'POST',
     body: JSON.stringify(data),
   });
+}
+
+// ── Governance API ──────────────────────────────────────────────
+
+export async function verifyIdentity(params: {
+  agentId: string;
+  resource: string;
+  action?: string;
+}) {
+  const query = new URLSearchParams({
+    agent_id: params.agentId,
+    resource: params.resource,
+    action: params.action ?? 'read',
+  });
+  return apiFetch<any>(`/api/governance/identity/verify?${query}`);
+}
+
+/** Screen text without submitting it as a complaint. */
+export async function scanWithArmor(text: string) {
+  return apiFetch<any>('/api/governance/armor/scan', {
+    method: 'POST',
+    body: JSON.stringify({ text }),
+  });
+}
+
+export async function fetchGovernanceStats() {
+  return apiFetch<any>('/api/governance/stats');
 }
 
 // ── SSE Event Stream ────────────────────────────────────────────

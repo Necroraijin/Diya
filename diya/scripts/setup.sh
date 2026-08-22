@@ -18,17 +18,22 @@ cd ../..
 
 echo ""
 echo "[2/4] Setting up Python virtual environments..."
+# api-gateway and agent-service also need the shared diya-core package, which
+# lives at packages/core-py and is installed editable so edits take effect
+# without a reinstall.
 for service in api-gateway mesh-service agent-service notice-service; do
     echo "  Setting up $service..."
     cd "apps/$service"
     python -m venv .venv 2>/dev/null || python3 -m venv .venv 2>/dev/null || echo "  Warning: Could not create venv for $service (Python 3 required)"
-    if [ -f ".venv/bin/activate" ]; then
-        source .venv/bin/activate
+    ACTIVATE=""
+    [ -f ".venv/bin/activate" ] && ACTIVATE=".venv/bin/activate"
+    [ -f ".venv/Scripts/activate" ] && ACTIVATE=".venv/Scripts/activate"
+    if [ -n "$ACTIVATE" ]; then
+        source "$ACTIVATE"
         pip install -q -r requirements.txt
-        deactivate
-    elif [ -f ".venv/Scripts/activate" ]; then
-        source .venv/Scripts/activate
-        pip install -q -r requirements.txt
+        case "$service" in
+            api-gateway|agent-service) pip install -q -e ../../packages/core-py ;;
+        esac
         deactivate
     fi
     cd ../..

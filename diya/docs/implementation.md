@@ -144,7 +144,12 @@
 
 ---
 
-### 8. Backend Services — Phase 2 (Scaffolded)
+### 8. Backend Services — Phase 2 (Built)
+
+> The section below originally described the scaffolded version, where the
+> endpoints returned hardcoded literals. Phase 2 replaced that with real
+> implementations; §8b records what actually runs now.
+
 **What:** All 4 Python microservices fully scaffolded with working endpoints, mock data, CORS, proper response models, and documentation.
 
 **API Gateway** (`apps/api-gateway`, port 8000):
@@ -180,11 +185,88 @@
 
 ---
 
+### 8b. Backend Services — Phase 2 (what actually runs)
+
+**Why the rewrite:** every service above returned literals. There was no
+conflict-detection algorithm anywhere in the repo, the "generated" PDF was a
+placeholder, the SSE stream was a synthetic heartbeat, and the seed data was
+triplicated across the JSON files, the mesh service and the gateway — three
+copies that had already drifted.
+
+**`packages/core-py` — the shared package (new).** Installed editable into
+every Python service (`pip install -e packages/core-py`):
+- `models.py` — camelCase Pydantic models mirroring `apps/web/src/types/index.ts`
+  exactly, so `.model_dump()` is directly consumable by the frontend.
+- `geo.py` — haversine distance and geofence intersection.
+- `conflict.py` — **the detection algorithm.** Geofence penetration (or a shared
+  OSM `wayId`) qualifies a pair; date-range overlap or a repeat-dig inside the
+  365-day window makes it a conflict; union-find groups pairs into multi-party
+  conflicts; consolidation sequences the works deepest-excavation-first
+  (sewage → water → telecom → roads) with a rolling 60% phase overlap. Savings
+  are derived arithmetic, not constants.
+- `seed.py` — `data/synthetic/*.json` is now the single source of truth.
+- `events.py` — async event bus with bounded per-subscriber queues (drops
+  oldest rather than stalling the publisher).
+- `repository.py` — `Repository` ABC with in-memory and Firestore
+  implementations; Firestore failures degrade to memory instead of 500ing.
+  Re-detection preserves `resolved`/`dismissed` status across runs.
+- `pubsub.py` — Pub/Sub publisher with a local no-op fallback and a DLQ.
+
+**Gateway:** repository-backed, real upstream health probes, `POST
+/api/conflicts/detect`, the resolve → notice-generation chain, artifact
+streaming, `POST /api/ingest/{dept_id}`, governance stats derived from the real
+activity log, and an SSE stream carrying genuine domain events
+(`agent.activity`, `conflict.resolved`, `notice.generated`, `armor.blocked`).
+CORS was `allow_origins=["*"]` with `allow_credentials=True` — an invalid
+combination browsers reject; origins are now enumerated.
+
+**Mesh service:** live Overpass fetch keyed by stable OSM way id, with a disk
+cache and hand-digitised bundled fallback geometry so a dead Overpass never
+breaks the demo (PRD §12 red flag #3). Overlap areas are computed with shapely
+under a local equirectangular projection, so `intersection_area_m2` is real m².
+
+**Notice service:** ReportLab produces a full municipal notice PDF (authority
+header, closure meta table, affected area, sequence-of-works, departments,
+public benefit, grievance channel) and `icalendar` produces a valid VCALENDAR
+with one VEVENT per phase plus a −1 day alarm. Both carry the synthetic-data
+disclaimer required by PRD §11. Artifacts persist to GCS when `GCS_BUCKET` is
+set, otherwise to a local volume.
+
+**Agent service:** `/agents/status` is derived from the seeded departments. The
+orchestration endpoints now return **501** rather than fabricated success
+payloads — a stub that lies about having run an agent is worse than one that
+admits it has not been built. ADK wiring is Phase 3.
+
+**Governance:** identity scoping had two implementations with disagreeing
+parsers; there is now one (`api-gateway/governance.py`). Model Armor's
+substring list flagged any complaint containing "database", "pretend" or "dan"
+— "Dandekar Road" would have been a live false positive — and is now 13
+word-boundary-anchored patterns that redact rather than discard, so the
+legitimate part of a complaint survives.
+
+**Verified end-to-end** with all four services up: detection independently
+rediscovers both hand-authored seeded conflicts (`conf-001` 4-way critical,
+`conf-002` 3-way critical); the PDF is a valid `%PDF-1.4` with all text
+confirmed via pypdf; the ICS parses as a valid VCALENDAR; resolve → notice →
+download all return 200 and a second resolve returns 409; the mesh falls back
+correctly with Overpass pointed at an unreachable host; identity
+GRANTED/DENIED/wildcard all behave; ingest publishes in local mode.
+
+> **Note for the demo script:** consolidation savings are now derived from the
+> works' own budgets and differ from the figures hardcoded in `mock-data.ts`
+> (`conf-001` derives ₹1.44 Cr against the ₹3.2 Cr previously shown). The
+> frontend still reads mock data — wiring it to the live gateway is Phase 5 —
+> so the two disagree until then.
+
+---
+
 ### 9. API Integration Layer — Phase 3
 **What:** Centralized API client, data fetching hooks, loading skeletons, toast notifications, settings page, Terraform IaC, and development scripts.
 
 **API Client** (`apps/web/src/lib/api.ts`):
-- Centralized fetch wrapper with `USE_MOCK` flag for easy backend swap
+- Centralized fetch wrapper. (The `USE_MOCK` flag was dead — nothing read it —
+  and was removed in Phase 2; pages import from `mock-data.ts` directly, and
+  connecting them to these functions is Phase 5.)
 - Functions for all endpoints: departments, planned works, conflicts, mesh, notices, agents, dashboard
 - `submitComplaint()` with Model Armor integration
 - `subscribeToEvents()` SSE client

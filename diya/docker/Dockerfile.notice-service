@@ -1,3 +1,4 @@
+# Build context is the repo root (diya/) so every service shares one context.
 FROM python:3.12-slim
 
 WORKDIR /app
@@ -6,12 +7,13 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     fonts-liberation \
     && rm -rf /var/lib/apt/lists/*
 
-COPY requirements.txt .
+COPY apps/notice-service/requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-COPY . .
+COPY apps/notice-service/ .
 
 RUN mkdir -p /app/output
+ENV OUTPUT_DIR=/app/output
 
 EXPOSE 8003
 

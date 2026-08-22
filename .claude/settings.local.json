@@ -42,7 +42,12 @@
       "Bash(curl -s -X POST localhost:8000/api/ingest/dept-roads)",
       "Bash(python -c \"import sys,json;print\\(json.load\\(sys.stdin\\)\\)\")",
       "Bash(curl -s localhost:8000/api/governance/stats)",
-      "Bash(python -c \"import sys,json;d=json.load\\(sys.stdin\\);print\\('identity',d['identity_checks']\\);print\\('armor',d['armor_scans']\\);print\\('patterns',d['armor_patterns']\\)\")"
+      "Bash(python -c \"import sys,json;d=json.load\\(sys.stdin\\);print\\('identity',d['identity_checks']\\);print\\('armor',d['armor_scans']\\);print\\('patterns',d['armor_patterns']\\)\")",
+      "Bash(curl -s -m 3 localhost:8000/health)",
+      "Bash(python -c \"import diya_core; print\\(diya_core.__file__\\)\")",
+      "Bash(npx tsc *)",
+      "Bash(echo \"tsc exit:$?\")",
+      "Bash(cd *)"
     ]
   }
 }

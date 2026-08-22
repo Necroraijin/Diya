@@ -7,6 +7,15 @@ set -e
 echo "=== DIYA Development Server ==="
 echo ""
 
+# Shared configuration. DIYA_STORE=memory keeps the whole stack cloud-free;
+# the services locate data/synthetic by walking up from their own directory,
+# so DIYA_DATA_DIR only needs setting if the seed lives elsewhere.
+export DIYA_STORE="${DIYA_STORE:-memory}"
+export CORS_ORIGINS="${CORS_ORIGINS:-http://localhost:3000,http://127.0.0.1:3000}"
+export MESH_SERVICE_URL="${MESH_SERVICE_URL:-http://localhost:8001}"
+export AGENT_SERVICE_URL="${AGENT_SERVICE_URL:-http://localhost:8002}"
+export NOTICE_SERVICE_URL="${NOTICE_SERVICE_URL:-http://localhost:8003}"
+
 # Start API Gateway in background
 echo "Starting API Gateway on :8000..."
 cd apps/api-gateway

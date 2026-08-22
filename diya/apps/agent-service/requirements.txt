@@ -1,6 +1,9 @@
+# diya-core is installed separately from ../../packages/core-py:
+#   pip install -e ../../packages/core-py
 fastapi==0.115.6
 uvicorn[standard]==0.34.0
 pydantic==2.10.4
+# ADK / Vertex land in Phase 3 — pinned now so the image is ready for them.
 google-adk==1.3.0
 google-cloud-aiplatform==1.78.0
 google-cloud-firestore==2.19.0
