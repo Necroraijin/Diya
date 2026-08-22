@@ -26,6 +26,18 @@ _IDENTITY_RE = re.compile(r"^agent-identity-(?P<scope>[a-z0-9]+)-(?P<seq>\d+)$")
 # detail — every other agent is confined to its own department's collection.
 CROSS_DEPARTMENT_SCOPES = {"coordinator"}
 
+# Not every agent is departmental. The Citizen Notice Agent reads conflicts and
+# writes notices, and holds no department scope at all — modelling it as a
+# department (the earlier behaviour) denied it the only two collections it
+# exists to touch. Non-department scopes declare their grants explicitly here:
+# {scope: {collection: {actions}}}.
+FUNCTIONAL_SCOPES: dict[str, dict[str, set[str]]] = {
+    "notice": {"conflicts": {"read"}, "notices": {"read", "write"}},
+}
+
+# Collections that are not owned by any single department.
+SHARED_COLLECTIONS = {"conflicts", "notices", "mesh_edits", "departments"}
+
 
 @dataclass
 class IdentityDecision:
@@ -67,6 +79,26 @@ def check_identity(agent_id: str, resource: str, action: str = "read") -> Identi
             "none",
         )
 
+    grants = FUNCTIONAL_SCOPES.get(agent_scope)
+    if grants is not None:
+        collection = (target_scope or "").strip()
+        allowed = grants.get(collection, set())
+        readable = ", ".join(
+            f"{c}:{'/'.join(sorted(a))}" for c, a in sorted(grants.items())
+        )
+        if action in allowed:
+            return IdentityDecision(
+                agent_id, resource, action, "GRANTED",
+                f"The {agent_scope} agent holds {collection}:{action} scope.",
+                readable,
+            )
+        return IdentityDecision(
+            agent_id, resource, action, "DENIED",
+            f"The {agent_scope} agent may not {action} {collection or 'that'} "
+            f"resources. Its scope is {readable}.",
+            readable,
+        )
+
     if agent_scope in CROSS_DEPARTMENT_SCOPES:
         return IdentityDecision(
             agent_id, resource, action, "GRANTED",
@@ -84,8 +116,13 @@ def check_identity(agent_id: str, resource: str, action: str = "read") -> Identi
     if target_scope and target_scope != agent_scope:
         return IdentityDecision(
             agent_id, resource, action, "DENIED",
-            f"Scope violation: the {agent_scope} agent cannot {action} "
-            f"{target_scope} resources.",
+            (
+                f"Scope violation: the {agent_scope} agent holds no "
+                f"cross-department read scope. Only the Coordinator does."
+                if target_scope in SHARED_COLLECTIONS
+                else f"Scope violation: the {agent_scope} agent cannot {action} "
+                     f"{target_scope} resources."
+            ),
             f"departments/dept-{agent_scope}/**",
         )
 

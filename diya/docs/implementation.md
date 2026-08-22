@@ -260,6 +260,82 @@ GRANTED/DENIED/wildcard all behave; ingest publishes in local mode.
 
 ---
 
+### 8c. Agent Layer — Phase 3
+
+**What:** the ADK fleet from PRD §6, its orchestration from §6.4, and the
+Memory Bank from §6.2, in `apps/agent-service/`.
+
+**`agents.py` — the fleet.** One `LlmAgent` per department (built from the
+seeded department list, so adding a department adds an agent), a Coordinator,
+and a Citizen Notice Agent, assembled as
+`SequentialAgent[ParallelAgent[dept×4], coordinator, notice]`. The department
+agents are independent, so they run concurrently; the Coordinator cannot start
+until every feed is in, so that edge is sequential. `GET /agents/topology`
+returns the tree built from the live agent objects, which means the
+architecture diagram cannot drift from the code it describes.
+
+Each agent is handed only the tools its Identity can use. A Department Agent
+has no tool that reads a peer, and carries `disallow_transfer_to_peers=True`
+— so the scope boundary holds structurally as well as at the gateway.
+
+**`tools.py` — gateway-mediated, identity-checked.** No agent opens its own
+Firestore handle; every tool goes through the API gateway, and every tool
+verifies its caller's scope before the read. That is the Agent Gateway
+mediation of PRD §5, and it makes the cross-department denial real rather than
+narrated: `read_all_planned_works` under a department identity raises
+`ScopeDenied`, and the refusal is logged to the activity feed the governance
+page renders.
+
+**`memory.py` — Memory Bank.** Cross-session recollection keyed by conflict id:
+first seen, times surfaced, last outcome. Flushed on every write through a
+temp-file rename, because the demo restarts services and a memory that only
+persisted on clean shutdown would not survive that. Backed by Vertex Agent
+Engine when `MEMORY_BANK` is set, by a local JSON file otherwise.
+
+**`orchestrator.py` — two runners, one tool set.** `run_adk` drives the real
+tree through an ADK `Runner`; `run_deterministic` calls the same tools in the
+same order with no model. Both are honest about which ran, and an ADK failure
+falls through to the deterministic path with the cause attached rather than
+being presented as an agent run.
+
+**Why a deterministic path at all.** The overlap distances, phase ordering and
+rupee savings come from `diya_core.conflict` on *both* paths — the model
+sequences tools and narrates, it does not do arithmetic. The agent instructions
+forbid it explicitly. An LLM inventing a number a judge then checks is a worse
+outcome than no LLM in the loop, and this way the pipeline is verifiable
+without credentials.
+
+**Three bugs found by running it:**
+- The max-turn cap counted department ingestion against the Coordinator's
+  budget, so with 4 departments the Coordinator was starved before it could
+  propose a single window. The cap now applies to the stage PRD red flag #9 is
+  actually about.
+- The Citizen Notice Agent was denied `conflicts/{id}` — `governance.py` only
+  modelled department scopes, so a functional agent got parsed as a department
+  and refused the two collections it exists to touch. Non-department scopes now
+  declare their grants explicitly (`FUNCTIONAL_SCOPES`).
+- ADK runs sub-agents in a `TaskGroup`, so a missing credential surfaced as
+  "ExceptionGroup: 4 sub-exceptions". Unwrapped, it now reads "No API key was
+  provided", which is the thing a person can act on.
+
+**Verified end-to-end**, all four services up, no GCP credentials:
+- Full run: 8 department tool calls (13 records), cross-department read,
+  detection finding `conf-001` (4 works, 4 phases) and `conf-002` (3 works,
+  3 phases), then two notices — PDF 4,237 bytes `%PDF-1.4`, ICS 2,531 bytes
+  valid `VCALENDAR`, both downloadable through the gateway.
+- Memory: second run reports "Seen before: first surfaced …, 2 time(s)";
+  after resolution a third run skips both with "already resolved; not
+  re-flagged"; entries survive an agent-service restart.
+- Identity: the full matrix — notice/conflicts GRANTED, notice/departments
+  DENIED, coordinator wildcard GRANTED, department cross-read DENIED,
+  department own-write GRANTED, malformed identity DENIED.
+- Turn cap: at `AGENT_MAX_TURNS=3` the run truncates cleanly, marking the
+  un-run steps skipped rather than failing.
+- ADK path: the tree builds under `google-adk` 2.7.1; forced without a
+  backend it reports the real credential error and falls through.
+
+---
+
 ### 9. API Integration Layer — Phase 3
 **What:** Centralized API client, data fetching hooks, loading skeletons, toast notifications, settings page, Terraform IaC, and development scripts.
 

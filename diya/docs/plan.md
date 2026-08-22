@@ -77,13 +77,30 @@ Also landed in this phase, because nothing above worked without it:
 WebSocket was not built: SSE covers every push the UI needs and the browser
 never writes upstream over the same channel.
 
-### Phase 3: Agent Layer (Day 5-7)
-- [ ] ADK agent scaffolding
-- [ ] Department Agents (normalize feeds)
-- [ ] Coordinator Agent (conflict detection)
-- [ ] Citizen Notice Agent (artifact generation)
-- [ ] Agent orchestration (ParallelAgent + SequentialAgent)
-- [ ] Memory Bank integration for cross-session state
+### Phase 3: Agent Layer (Day 5-7) — complete
+- [x] ADK agent scaffolding (`google-adk` 2.7.1; the tree builds and is served at `GET /agents/topology`)
+- [x] Department Agents (normalize feeds) — one `LlmAgent` per department, each holding only its own two tools
+- [x] Coordinator Agent (conflict detection) — the one identity with cross-department read scope
+- [x] Citizen Notice Agent (artifact generation) — conditional leg, runs only on resolution
+- [x] Agent orchestration: `ParallelAgent(departments) -> Coordinator -> Notice` inside a `SequentialAgent`
+- [x] Memory Bank for cross-session state — a re-run recognises a conflict it has already surfaced and does not re-flag one already signed off
+- [x] Max-turn cap on the Coordinator (PRD red flag #9), enforced by the runner rather than by instruction
+
+**Execution has two paths over one tool set.** With a Gemini backend configured
+(`GOOGLE_API_KEY`, or `GOOGLE_GENAI_USE_VERTEXAI` with a real project) the ADK
+tree runs. Without one, the same tools execute in the same order
+deterministically. Both report which path ran — `execution_mode` on `/health`
+and `mode` on every run — and if the ADK path fails mid-run the response says
+so verbatim rather than quietly presenting the fallback as an agent run.
+
+This is not a stub standing in for missing work: the arithmetic lives in
+`diya_core.conflict` on **both** paths, so the LLM adds narration, not numbers.
+An agent inventing an overlap distance or a rupee saving is the fastest way to
+lose a judge who checks one.
+
+Not yet done, and needing a GCP project rather than more code: deploying the
+fleet to Agent Runtime, and pointing `MEMORY_BANK` at a real Vertex Agent
+Engine instead of the local file.
 
 ### Phase 4: Governance & Security (Day 8-9)
 - [ ] Agent Identity scoping per department

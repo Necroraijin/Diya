@@ -17,3 +17,6 @@ Thumbs.db
 *.log
 .vercel
 coverage/
+
+# Agent Memory Bank (local backing; cross-session state, not source)
+.memory/

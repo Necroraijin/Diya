@@ -73,8 +73,17 @@ services:
       - CORS_ORIGINS=http://localhost:3000,http://127.0.0.1:3000
       - GATEWAY_URL=http://api-gateway:8000
       - AGENT_MAX_TURNS=${AGENT_MAX_TURNS:-10}
+      - AGENT_MODEL=${AGENT_MODEL:-gemini-flash-latest}
+      # Without one of these the fleet runs its deterministic path and says so.
+      - GOOGLE_API_KEY=${GOOGLE_API_KEY:-}
+      - GOOGLE_GENAI_USE_VERTEXAI=${GOOGLE_GENAI_USE_VERTEXAI:-}
       - GOOGLE_CLOUD_PROJECT=${GOOGLE_CLOUD_PROJECT:-diya-demo}
       - VERTEX_AI_LOCATION=${VERTEX_AI_LOCATION:-us-central1}
+      # Memory Bank: cross-session recollection must survive a restart.
+      - MEMORY_DIR=/app/.memory
+      - MEMORY_BANK=${MEMORY_BANK:-}
+    volumes:
+      - agent-memory:/app/.memory
     networks:
       - diya-network
 
@@ -103,3 +112,4 @@ networks:
 volumes:
   notice-storage:
   osm-cache:
+  agent-memory:

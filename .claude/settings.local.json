@@ -47,7 +47,10 @@
       "Bash(python -c \"import diya_core; print\\(diya_core.__file__\\)\")",
       "Bash(npx tsc *)",
       "Bash(echo \"tsc exit:$?\")",
-      "Bash(cd *)"
+      "Bash(cd *)",
+      "Bash(python -c \"import google.adk, google.adk as a; print\\('adk', a.__version__\\)\")",
+      "Bash(python -c \"import google.adk as a; print\\('adk ok', a.__version__\\)\")",
+      "Bash(python *)"
     ]
   }
 }
