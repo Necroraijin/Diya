@@ -153,11 +153,24 @@ the status is `healthy`.
 Not done, and needing a GCP project rather than code: Cloud Run deployment of
 the five services.
 
-### Phase 6: Submission (Day 12)
-- [ ] Demo video recording (~4 min)
-- [ ] Text description
-- [ ] Final repo cleanup and license
-- [ ] Submit before IST-adjusted deadline (Sep 1, 5:30am IST)
+### Phase 6: Submission (Day 12) — prepared; two items are yours to do
+- [x] Demo video **script** (~4 min) — `docs/demo.md`, every figure captured from a live run
+- [x] Text description — `docs/submission.md`, in 100 / 250 / 500-word cuts plus a fact sheet
+- [x] Final repo cleanup and license — MIT `LICENSE` added (the README claimed one that did not exist); no TODOs, placeholders, dead endpoints, stray logging, or tracked credentials
+- [ ] **Demo video recording** — cannot be automated; follow `docs/demo.md`
+- [ ] **Submit** before the IST-adjusted deadline (Sep 1, 5:30am IST)
+
+The script is written to be checkable. Every number in it — 273 m of geofence
+penetration, 6 of 6 overlapping pairs, 196 closure-days falling to 144, ₹1.44
+Cr, a 4,237-byte PDF and a 2,531-byte ICS, a 303 ms resolve trace — was
+captured from a run of the stack, not estimated. If the recording disagrees
+with the script, re-derive the script.
+
+Two beats in it are deliberate and worth keeping even though both admit a
+limitation: naming `execution_mode: deterministic` out loud when no Gemini key
+is present, and killing the gateway on camera to show the dashboard flip to
+*Demo data — gateway offline*. Volunteering the seam is more convincing than
+hoping nobody probes it.
 
 ## Design Philosophy
 
