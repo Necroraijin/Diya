@@ -14,7 +14,7 @@ import {
   MapPin,
   IndianRupee,
 } from 'lucide-react';
-import { departments, plannedWorks } from '@/lib/mock-data';
+import { useDepartments, usePlannedWorks } from '@/lib/live';
 import { cn, formatDate, formatCurrency, getStatusColor, getStatusBg } from '@/lib/utils';
 
 const iconMap: Record<string, any> = {
@@ -26,6 +26,8 @@ const iconMap: Record<string, any> = {
 
 export default function DepartmentsPage() {
   const [selectedDept, setSelectedDept] = useState<string | null>(null);
+  const { data: departments } = useDepartments();
+  const { data: plannedWorks } = usePlannedWorks();
 
   return (
     <div className="page-container">
@@ -38,10 +40,10 @@ export default function DepartmentsPage() {
 
       {/* Department Cards */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-3 sm:gap-4 mb-6">
-        {departments.map((dept) => {
+        {departments.map((dept: any) => {
           const Icon = iconMap[dept.icon] || Route;
-          const deptWorks = plannedWorks.filter((w) => w.deptId === dept.id);
-          const conflictedWorks = deptWorks.filter((w) => w.status === 'conflicted');
+          const deptWorks = plannedWorks.filter((w: any) => w.deptId === dept.id);
+          const conflictedWorks = deptWorks.filter((w: any) => w.status === 'conflicted');
           const isSelected = selectedDept === dept.id;
 
           return (

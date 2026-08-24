@@ -182,7 +182,9 @@ async def list_departments() -> dict:
 async def gateway_reachable() -> Optional[str]:
     """Return None when the gateway answers, else why it did not."""
     try:
-        await _request("GET", "/health")
+        # Shallow probe on purpose: the gateway's own /health probes *this*
+        # service, so asking it would deadlock the two into a mutual timeout.
+        await _request("GET", "/health/live")
     except GatewayError as exc:
         return str(exc)
     return None

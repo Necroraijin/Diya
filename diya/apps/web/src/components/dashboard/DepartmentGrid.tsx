@@ -1,7 +1,7 @@
 'use client';
 
 import { Route, Droplets, Wifi, Waves } from 'lucide-react';
-import { departments } from '@/lib/mock-data';
+import { useDepartments } from '@/lib/live';
 import { cn } from '@/lib/utils';
 
 const iconMap: Record<string, any> = {
@@ -12,6 +12,8 @@ const iconMap: Record<string, any> = {
 };
 
 export default function DepartmentGrid() {
+  const { data: departments } = useDepartments();
+
   return (
     <div className="card animate-slide-up">
       <div className="card-header">
@@ -19,7 +21,7 @@ export default function DepartmentGrid() {
         <span className="text-xs text-diya-text-muted">{departments.length} active</span>
       </div>
       <div className="grid grid-cols-2 gap-px bg-diya-border">
-        {departments.map((dept) => {
+        {departments.map((dept: any) => {
           const Icon = iconMap[dept.icon] || Route;
           return (
             <div

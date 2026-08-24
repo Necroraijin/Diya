@@ -123,13 +123,35 @@ API: a denied cross-department read, and a blocked prompt injection.
 Still needing a GCP project rather than code: pointing `OTEL_EXPORT=cloudtrace`
 at a real project, and registering the fleet with the managed Agent Registry.
 
-### Phase 5: Integration & Polish (Day 10-11)
-- [ ] End-to-end integration testing
-- [ ] Frontend connected to live backend
-- [ ] SSE live mesh updates
-- [ ] Failure mode testing (agent loops, malformed data)
-- [ ] Architecture diagram (clean visual)
-- [ ] README with setup instructions
+### Phase 5: Integration & Polish (Day 10-11) — complete
+- [x] End-to-end integration testing — detect → resolve → PDF/ICS verified through the gateway
+- [x] Frontend connected to live backend — every page reads the API; `mock-data.ts` is now only a fallback
+- [x] SSE live mesh updates — one shared `EventSource`; each hook names the domain events that invalidate it
+- [x] Failure mode testing (agent loops, malformed data, dead upstreams)
+- [x] Architecture diagram (in the README, showing the real agent tree and scopes)
+- [x] README with setup instructions
+- [x] **The frontend typechecks.** `apps/web` had no `node_modules` for four phases, so every `api.ts` edit since Phase 2 was unverified. `tsc --noEmit` and `next build` are both green now.
+
+**The savings discrepancy is settled.** `mock-data.ts` and the demo script
+claimed ₹3.2 Cr for the Mumbai conflict and ₹1.8 Cr for Delhi. The detector
+derives ₹1.442 Cr and ₹0.778 Cr from the seeded budgets. The fixtures now carry
+the derived figures, so the fallback data and the live API agree — a judge
+comparing the two sees one number, not two.
+
+**Live vs demo is visible, not silent.** The top bar reads *Live — API Gateway*
+or *Demo data — gateway offline*. A dashboard that quietly serves stale
+fixtures when the backend is down is the exact failure this layer exists to
+prevent; pulling the plug on the gateway should make the UI say so.
+
+**One bug this phase found and fixed.** agent-service's health check probed the
+gateway's `/health`, which probes agent-service — so the two waited on each
+other until the gateway's 3s timeout fired, and a completely healthy fleet
+rendered as `agent-service: down` (3.77s per probe). The gateway now exposes a
+shallow `/health/live` that answers from its own process; the probe is 0.58s and
+the status is `healthy`.
+
+Not done, and needing a GCP project rather than code: Cloud Run deployment of
+the five services.
 
 ### Phase 6: Submission (Day 12)
 - [ ] Demo video recording (~4 min)

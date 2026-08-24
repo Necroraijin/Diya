@@ -16,6 +16,7 @@ import asyncio
 import json
 import os
 from contextlib import asynccontextmanager
+from datetime import date, timedelta
 from typing import Any, Optional
 
 import httpx
@@ -266,6 +267,20 @@ async def _service_post(base: str, path: str, payload: dict) -> Any:
 @app.get("/")
 async def root():
     return {"service": "DIYA API Gateway", "status": "operational", "version": "2.0.0"}
+
+
+@app.get("/health/live")
+async def liveness():
+    """
+    Shallow liveness. Answers from this process alone.
+
+    `/health` fans out to every upstream, and agent-service's own health check
+    probes the gateway — so pointing that probe at `/health` made the two
+    services wait on each other until one timed out, and the dashboard showed a
+    perfectly healthy fleet as `agent-service: down`. Anything that only needs
+    "is the gateway answering" asks here instead.
+    """
+    return {"status": "ok", "service": "api-gateway", "timestamp": utcnow_iso()}
 
 
 @app.get("/health")
@@ -887,7 +902,38 @@ async def dashboard_metrics():
             level: sum(1 for c in conflicts if c.severity == level)
             for level in ("critical", "high", "medium", "low")
         },
+        "conflictTrend": _conflict_trend(conflicts),
     }
+
+
+def _conflict_trend(conflicts: list, days: int = 7) -> list[dict]:
+    """
+    Cumulative detected/resolved counts over the trailing week.
+
+    Cumulative rather than per-day: the dashboard chart is read as "how big is
+    the backlog and is it closing", and a per-day series of mostly zeros
+    answers neither. A conflict detected before the window still counts as
+    detected on every day of it.
+    """
+    today = date.today()
+    axis = [today - timedelta(days=days - 1 - i) for i in range(days)]
+
+    def on_or_before(stamp: Optional[str], day: date) -> bool:
+        if not stamp:
+            return False
+        try:
+            return date.fromisoformat(stamp[:10]) <= day
+        except ValueError:
+            return False
+
+    return [
+        {
+            "date": day.isoformat(),
+            "detected": sum(1 for c in conflicts if on_or_before(c.detectedAt, day)),
+            "resolved": sum(1 for c in conflicts if on_or_before(c.resolvedAt, day)),
+        }
+        for day in axis
+    ]
 
 
 if __name__ == "__main__":

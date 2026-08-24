@@ -9,10 +9,14 @@ import {
   ExternalLink,
   AlertCircle,
 } from 'lucide-react';
-import { notices, conflicts } from '@/lib/mock-data';
+import { useNotices, useConflicts } from '@/lib/live';
+import { noticeArtifactUrl } from '@/lib/api';
 import { cn, formatDate, formatDateTime, getStatusColor, getStatusBg } from '@/lib/utils';
 
 export default function NoticesPage() {
+  const { data: notices } = useNotices();
+  const { data: conflicts } = useConflicts();
+
   return (
     <div className="page-container">
       <div className="flex items-start sm:items-center justify-between mb-5 sm:mb-6 flex-col sm:flex-row gap-2">
@@ -44,7 +48,7 @@ export default function NoticesPage() {
 
       {/* Notices grid */}
       <div className="space-y-3 sm:space-y-4">
-        {notices.map((notice) => (
+        {notices.map((notice: any) => (
           <div key={notice.id} className="card animate-fade-in">
             <div className="card-body">
               <div className="flex items-start justify-between mb-3 sm:mb-4 gap-2">
@@ -108,18 +112,34 @@ export default function NoticesPage() {
 
               {/* Download actions */}
               <div className="flex items-center gap-2 sm:gap-3 pt-2 border-t border-diya-border flex-wrap">
-                <button className="btn-primary flex items-center gap-2 text-xs">
+                {/* Plain hrefs, not fetch calls: the gateway streams the bytes
+                    back from the notice service, so the browser's own download
+                    handling is the right mechanism. */}
+                <a
+                  href={noticeArtifactUrl(notice.id, 'pdf')}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="btn-primary flex items-center gap-2 text-xs"
+                >
                   <Download className="w-3.5 h-3.5" />
                   <span className="hidden sm:inline">Download</span> PDF
-                </button>
-                <button className="btn-secondary flex items-center gap-2 text-xs">
+                </a>
+                <a
+                  href={noticeArtifactUrl(notice.id, 'ics')}
+                  className="btn-secondary flex items-center gap-2 text-xs"
+                >
                   <Calendar className="w-3.5 h-3.5" />
                   <span className="hidden sm:inline">Download</span> ICS
-                </button>
-                <button className="btn-ghost flex items-center gap-2 text-xs ml-auto">
+                </a>
+                <a
+                  href={noticeArtifactUrl(notice.id, 'pdf')}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="btn-ghost flex items-center gap-2 text-xs ml-auto"
+                >
                   <ExternalLink className="w-3.5 h-3.5" />
                   <span className="hidden sm:inline">Public Link</span>
-                </button>
+                </a>
               </div>
             </div>
           </div>
@@ -131,8 +151,8 @@ export default function NoticesPage() {
             Pending — Awaiting Conflict Resolution
           </h2>
           {conflicts
-            .filter((c) => c.status === 'detected')
-            .map((conflict) => (
+            .filter((c: any) => c.status === 'detected')
+            .map((conflict: any) => (
               <div key={conflict.id} className="card mb-3 opacity-60">
                 <div className="card-body flex items-center gap-3">
                   <div className="w-8 h-8 rounded-lg bg-diya-surface border border-diya-border flex items-center justify-center flex-shrink-0">
@@ -143,7 +163,8 @@ export default function NoticesPage() {
                       Notice pending for {conflict.id}
                     </p>
                     <p className="text-[10px] text-diya-text-muted truncate">
-                      {conflict.works.length} works on {conflict.works[0]?.location.streetName} &middot;{' '}
+                      {conflict.works?.length ?? conflict.workIds?.length ?? 0} works on{' '}
+                      {conflict.works?.[0]?.location?.streetName ?? conflict.locationSummary} &middot;{' '}
                       Resolve conflict to generate notice
                     </p>
                   </div>

@@ -448,6 +448,105 @@ PDF request still hung for ~2.6s instead of failing fast. It now goes through
 
 **Sidebar Update:** Added "Governance" nav item with Shield icon between Agents and Settings.
 
+### 11. Integration & Polish — Phase 5
+
+The phase that made the previous four visible. Until now every page imported
+from `mock-data.ts`, so the UI could not be wrong — and could not be right
+either. The backend was verified entirely by curl.
+
+**`apps/web/src/lib/live.tsx` — the live data layer.** Hooks (`useConflicts`,
+`useDepartments`, `usePlannedWorks`, `useNotices`, `useAgentActivity`,
+`useDashboardMetrics`, `useGovernanceStats`, `useRegistry`, `useTraces`) fetch
+from the gateway and fall back to the seeded fixtures when it is unreachable.
+
+Three design decisions inside it are worth stating:
+
+1. **The fallback is visible.** Each hook returns `source`, and `LiveProvider`
+   publishes gateway reachability to the whole tree. The top bar reads *Live —
+   API Gateway*, *Demo data — gateway offline*, or *Connecting…* — three states,
+   not two, because "we have not checked yet" is a different claim from "it is
+   down". A dashboard that silently serves stale fixtures when the backend dies
+   is worse than one that crashes: it lies confidently.
+
+2. **One `EventSource` for the whole app.** Every hook subscribes to a shared
+   SSE bus rather than opening its own stream. Three components on the
+   dashboard would otherwise consume half the browser's six-connection budget
+   for the origin.
+
+3. **Refetching is event-driven, not polled.** Each hook names the domain
+   events that invalidate it (`conflict.resolved` invalidates conflicts,
+   notices and metrics; `armor.blocked` invalidates the governance feed), so
+   resolving a conflict in one tab updates three panels in another without any
+   of them polling. The 15-second health poll is the only timer, and it exists
+   only so a gateway that comes back is noticed without a reload.
+
+**Conflict zones are derived, not placed.** The map used to draw a hand-authored
+circle at a hard-coded coordinate. Zones now come from the live conflicts —
+centre is the first affected work, radius is its real `geofenceRadius` — so a
+newly detected conflict lights up the map without anyone editing a fixture.
+Building and road geometry comes from the mesh service (OSM-derived when
+Overpass answers, its bundled extract otherwise), with the mock arrays as a
+last resort.
+
+**Resolve is a real button now.** The conflicts page calls
+`POST /api/conflicts/{id}/resolve` and refetches rather than patching local
+state optimistically, so what the table shows is what the backend stored. The
+notice page's download buttons are plain `<a href>` to the gateway's artifact
+route — the bytes are streamed from the notice service, so the browser's own
+download handling is the right mechanism.
+
+**`GET /api/dashboard/metrics` gained `conflictTrend`.** The chart component had
+always read it; the endpoint had never returned it, so the one component still
+on fixtures was the one nobody would notice. It is cumulative rather than
+per-day: the chart is read as "how big is the backlog and is it closing", and a
+per-day series of mostly zeros answers neither question.
+
+#### The savings discrepancy, settled
+
+`mock-data.ts` and the demo script claimed ₹3.2 Cr for the Mumbai four-way
+conflict and ₹1.8 Cr for Delhi. Those numbers were written before the detector
+existed. `diya_core.conflict` derives ₹1.442 Cr and ₹0.778 Cr from the seeded
+budgets — 6% avoided mobilisation per joining work, 10% avoided restoration for
+every work except the one that resurfaces last.
+
+The fixtures now carry the derived figures. Fabricated numbers were the larger
+risk here: a judge who opens the conflict detail and the dashboard sees one
+number in both places, and the reasoning trace shows the arithmetic that
+produced it.
+
+#### A real bug this phase surfaced
+
+agent-service's health check probed the gateway's `/health`. The gateway's
+`/health` probes agent-service. Each request therefore waited on the other until
+the gateway's 3-second timeout fired — so a completely healthy fleet rendered as
+`agent-service: down`, and every agent health check took 3.77 seconds.
+
+The gateway now exposes `GET /health/live`, a shallow liveness check that
+answers from its own process with no fan-out, and the agent probes that. 3.77s →
+0.58s, and `/health` reports `healthy`. Deep health checks that call each other
+are a classic distributed-systems deadlock, and it would have been on camera.
+
+#### Verification
+
+- **First typecheck in the project's life.** `apps/web` had no `node_modules`
+  for four phases, so every `api.ts` edit since Phase 2 was unverified prose.
+  `tsc --noEmit` exits 0 and `next build` compiles all 12 routes. (The one
+  error it caught in existing code was a broken string literal; the rest were
+  implicit-`any` parameters in the map renderer.)
+- **End to end through the gateway:** 13 works → 2 conflicts (`conf-001`
+  ₹1.442 Cr / 4 works, `conf-002` ₹0.778 Cr / 3 works) → resolve → notice
+  generated → PDF 4,237 bytes `%PDF-1.4` and ICS 2,531 bytes `BEGIN:VCALENDAR`
+  both downloaded through the gateway. Metrics then read resolved 1, savings
+  ₹1,44,20,000, notices 1.
+- **All 8 dashboard routes return 200** against the dev server; CORS
+  (including on the SSE stream) allows `http://localhost:3000`.
+- **Failure modes:** unknown department 404, unknown conflict 404, missing
+  notice artifact 404, unknown city 404, double resolve 409, prompt injection
+  through the citizen surface blocked with two classified threats and spans.
+- **Gateway killed:** all pages still render 200 with the seeded set, and the
+  status pill flips rather than the UI pretending the data is live.
+
+
 ---
 
 ## Architecture Decisions

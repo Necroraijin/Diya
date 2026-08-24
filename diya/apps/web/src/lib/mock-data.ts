@@ -302,10 +302,10 @@ export const conflicts: Conflict[] = [
     proposedWindow: { start: '2026-09-15', end: '2026-12-15' },
     status: 'detected',
     reasoningTrace:
-      'Detected 4-way conflict on SV Road, Andheri West (Ward K/W). All four departments have planned works within a 200m radius on the same road segment (wayId: way-48213001). Temporal overlap spans Sep 15 - Dec 15, 2026. Proposed consolidated window: complete all underground work (water main, OFC, storm drain) first (Sep 15 - Nov 15), then surface work (resurfacing) last (Nov 15 - Dec 15). Estimated savings: 3.2 Cr from shared traffic management, single mobilization, and reduced repeated restoration costs.',
+      'Detected 4-way conflict on SV Road, Andheri West (Ward K/W). All four departments have planned works within a 200m radius on the same road segment (wayId: way-48213001). Temporal overlap spans Sep 15 - Dec 15, 2026. Proposed consolidated window: complete all underground work (water main, OFC, storm drain) first (Sep 15 - Nov 15), then surface work (resurfacing) last (Nov 15 - Dec 15). Estimated savings: 1.44 Cr from shared traffic management, single mobilization, and reduced repeated restoration costs.',
     detectedAt: '2026-08-20T10:30:00Z',
     severity: 'critical',
-    savings: 32000000,
+    savings: 14420000,
     city: 'mumbai',
   },
   {
@@ -318,10 +318,10 @@ export const conflicts: Conflict[] = [
     proposedWindow: { start: '2026-09-10', end: '2026-11-20' },
     status: 'detected',
     reasoningTrace:
-      'Detected 3-way conflict on Chandni Chowk Road, Delhi (Ward: Chandni Chowk). Roads Dept restoration, DJB pipeline relaying, and sewer rehabilitation all target the same road segment within 200m. Temporal overlap: Sep 10 - Nov 20, 2026. Proposed sequence: sewer rehabilitation (trenchless, minimal surface disruption) → pipeline relaying → road restoration as final step. Estimated savings: 1.8 Cr.',
+      'Detected 3-way conflict on Chandni Chowk Road, Delhi (Ward: Chandni Chowk). Roads Dept restoration, DJB pipeline relaying, and sewer rehabilitation all target the same road segment within 200m. Temporal overlap: Sep 10 - Nov 20, 2026. Proposed sequence: sewer rehabilitation (trenchless, minimal surface disruption) → pipeline relaying → road restoration as final step. Estimated savings: 0.78 Cr.',
     detectedAt: '2026-08-20T11:15:00Z',
     severity: 'critical',
-    savings: 18000000,
+    savings: 7780000,
     city: 'delhi',
   },
   {
@@ -528,8 +528,8 @@ export const reasoningTraces: ReasoningTrace[] = [
       {
         step: 5,
         action: 'Savings Estimation',
-        reasoning: 'Estimating cost savings from consolidated execution: shared traffic management (~80L), single mobilization/demobilization (~1.2Cr), reduced repeated restoration (~1.2Cr), citizen disruption reduction (qualitative).',
-        result: 'Estimated total savings: Rs 3.2 Crore. Citizen disruption reduced from 4 separate closures to 1 consolidated closure.',
+        reasoning: 'Estimating cost savings from consolidated execution: avoided site mobilisation at 6% of each joining work budget, and avoided surface restoration at 10% for every work except the one that resurfaces last.',
+        result: 'Estimated total savings: Rs 1.44 Crore. Citizen disruption reduced from 4 separate closures to 1 consolidated closure.',
         timestamp: '2026-08-20T10:30:08Z',
         duration: 1150,
       },
@@ -546,7 +546,7 @@ export const dashboardMetrics: DashboardMetrics = {
   resolvedConflicts: 1,
   activeWorks: 15,
   departments: 4,
-  estimatedSavings: 55000000,
+  estimatedSavings: 5000000,
   citizenNotices: 1,
   conflictTrend: [
     { date: '2026-08-14', detected: 0, resolved: 0 },

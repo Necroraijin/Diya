@@ -13,7 +13,8 @@ import {
   XCircle,
   ArrowRight,
 } from 'lucide-react';
-import { conflicts } from '@/lib/mock-data';
+import { useConflicts } from '@/lib/live';
+import { resolveConflict, detectConflicts } from '@/lib/api';
 import { cn, formatDate, formatCurrency, getStatusColor, getStatusBg, timeAgo } from '@/lib/utils';
 import type { Conflict } from '@/types';
 
@@ -21,8 +22,47 @@ export default function ConflictsPage() {
   const [selectedConflict, setSelectedConflict] = useState<Conflict | null>(null);
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [searchQuery, setSearchQuery] = useState('');
+  const [busy, setBusy] = useState<string | null>(null);
+  const [actionError, setActionError] = useState<string | null>(null);
 
-  const filteredConflicts = conflicts.filter((c) => {
+  const { data: conflicts, source, refresh } = useConflicts();
+
+  // Resolution is the end of the real-action chain: the gateway marks the
+  // conflict resolved *and* generates the citizen PDF/ICS. Local state is not
+  // patched optimistically — we refetch, so what the table shows is what the
+  // backend actually stored.
+  const act = async (id: string, kind: 'resolve' | 'dismiss') => {
+    setBusy(id);
+    setActionError(null);
+    try {
+      await resolveConflict(id, {
+        // The gateway branches on the literal 'dismiss'; anything else resolves.
+        resolution_type: kind === 'resolve' ? 'consolidated' : 'dismiss',
+        notes: kind === 'resolve' ? 'Approved from the conflicts console.' : 'Dismissed as a false positive.',
+      });
+      await refresh();
+      setSelectedConflict(null);
+    } catch (err: any) {
+      setActionError(err?.message ?? 'Action failed');
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  const rerunDetection = async () => {
+    setBusy('detect');
+    setActionError(null);
+    try {
+      await detectConflicts();
+      await refresh();
+    } catch (err: any) {
+      setActionError(err?.message ?? 'Detection failed');
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  const filteredConflicts = (conflicts as Conflict[]).filter((c) => {
     if (statusFilter !== 'all' && c.status !== statusFilter) return false;
     if (searchQuery) {
       const q = searchQuery.toLowerCase();
@@ -46,9 +86,21 @@ export default function ConflictsPage() {
                 Cross-department infrastructure conflicts detected by the Coordinator Agent
               </p>
             </div>
-            <span className="text-xs text-diya-text-muted flex-shrink-0">
-              {filteredConflicts.length} conflicts
-            </span>
+            <div className="flex items-center gap-3 flex-shrink-0">
+              {source === 'demo' && (
+                <span className="badge bg-diya-card text-diya-text-muted">demo data</span>
+              )}
+              <button
+                onClick={rerunDetection}
+                disabled={busy !== null}
+                className="btn-secondary text-xs disabled:opacity-40"
+              >
+                {busy === 'detect' ? 'Scanning…' : 'Re-run detection'}
+              </button>
+              <span className="text-xs text-diya-text-muted">
+                {filteredConflicts.length} conflicts
+              </span>
+            </div>
           </div>
 
           {/* Filters */}
@@ -260,12 +312,23 @@ export default function ConflictsPage() {
             </div>
 
             {/* Actions */}
+            {actionError && (
+              <p className="text-xs text-diya-conflict">{actionError}</p>
+            )}
             <div className="flex gap-2 pt-2">
-              <button className="btn-primary flex-1 flex items-center justify-center gap-2">
+              <button
+                onClick={() => act(selectedConflict.id, 'resolve')}
+                disabled={busy !== null || selectedConflict.status !== 'detected'}
+                className="btn-primary flex-1 flex items-center justify-center gap-2 disabled:opacity-40"
+              >
                 <CheckCircle2 className="w-3.5 h-3.5" />
-                Resolve
+                {busy === selectedConflict.id ? 'Working…' : 'Resolve & Notify'}
               </button>
-              <button className="btn-secondary flex items-center justify-center gap-2">
+              <button
+                onClick={() => act(selectedConflict.id, 'dismiss')}
+                disabled={busy !== null || selectedConflict.status !== 'detected'}
+                className="btn-secondary flex items-center justify-center gap-2 disabled:opacity-40"
+              >
                 <XCircle className="w-3.5 h-3.5" />
                 Dismiss
               </button>

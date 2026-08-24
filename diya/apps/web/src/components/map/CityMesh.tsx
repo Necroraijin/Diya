@@ -6,10 +6,10 @@ import {
   mumbaiRoads,
   delhiBuildings,
   delhiRoads,
-  conflictZones,
-  plannedWorks,
   cities,
 } from '@/lib/mock-data';
+import { useConflicts, useLive, usePlannedWorks } from '@/lib/live';
+import { fetchMeshData } from '@/lib/api';
 import MapControls from './MapControls';
 import MapLegend from './MapLegend';
 import ConflictPanel from './ConflictPanel';
@@ -31,15 +31,58 @@ export default function CityMesh({ selectedCity, onCityChange }: CityMeshProps) 
   const [hoveredElement, setHoveredElement] = useState<string | null>(null);
 
   const city = cities.find((c) => c.id === selectedCity) || cities[0];
-  const buildings = selectedCity === 'delhi' ? delhiBuildings : mumbaiBuildings;
-  const roads = selectedCity === 'delhi' ? delhiRoads : mumbaiRoads;
-  const cityWorks = plannedWorks.filter((w) => w.city === selectedCity);
+
+  // Geometry comes from the mesh service — OSM-derived when Overpass is
+  // reachable, its bundled extract otherwise. The mock arrays are the last
+  // fallback, for when the gateway itself is down.
+  const fallbackMesh = useMemo(
+    () =>
+      selectedCity === 'delhi'
+        ? { buildings: delhiBuildings, roads: delhiRoads }
+        : { buildings: mumbaiBuildings, roads: mumbaiRoads },
+    [selectedCity]
+  );
+  const meshFetcher = useCallback(() => fetchMeshData(selectedCity), [selectedCity]);
+  const { data: mesh } = useLive<any>(meshFetcher, fallbackMesh);
+
+  const buildings = mesh?.buildings?.length ? mesh.buildings : fallbackMesh.buildings;
+  const roads = mesh?.roads?.length ? mesh.roads : fallbackMesh.roads;
+
+  const { data: allWorks } = usePlannedWorks();
+  const { data: allConflicts } = useConflicts();
+  const cityWorks = allWorks.filter((w: any) => w.city === selectedCity);
+
+  // Zones are derived from the conflicts themselves rather than hand-placed, so
+  // a newly detected conflict lights up the map without anyone editing a
+  // fixture. Centre is the first affected work; radius is its real geofence.
+  const conflictZones = useMemo(
+    () =>
+      allConflicts
+        .filter((c: any) => c.city === selectedCity && c.status === 'detected')
+        .map((c: any) => {
+          const anchor = (c.works ?? []).find((w: any) => w?.location);
+          if (!anchor) return null;
+          return {
+            conflictId: c.id,
+            center: [anchor.location.lng, anchor.location.lat] as [number, number],
+            radius: anchor.geofenceRadius ?? 200,
+            severity: c.severity,
+          };
+        })
+        .filter(Boolean) as {
+        conflictId: string;
+        center: [number, number];
+        radius: number;
+        severity: string;
+      }[],
+    [allConflicts, selectedCity]
+  );
 
   const viewBox = useMemo(() => {
-    const allLngs = buildings.flatMap((b) => b.coordinates.map((c) => c[0]));
-    const allLats = buildings.flatMap((b) => b.coordinates.map((c) => c[1]));
-    const roadLngs = roads.flatMap((r) => r.path.map((p) => p[0]));
-    const roadLats = roads.flatMap((r) => r.path.map((p) => p[1]));
+    const allLngs = buildings.flatMap((b: any) => b.coordinates.map((c: any) => c[0]));
+    const allLats = buildings.flatMap((b: any) => b.coordinates.map((c: any) => c[1]));
+    const roadLngs = roads.flatMap((r: any) => r.path.map((p: any) => p[0]));
+    const roadLats = roads.flatMap((r: any) => r.path.map((p: any) => p[1]));
     const lngs = [...allLngs, ...roadLngs];
     const lats = [...allLats, ...roadLats];
     const minLng = Math.min(...lngs) - 0.002;
@@ -97,9 +140,9 @@ export default function CityMesh({ selectedCity, onCityChange }: CityMeshProps) 
 
         {/* Roads */}
         {activeLayers.roads &&
-          roads.map((road) => {
-            const pathPoints = road.path.map(([lng, lat]) => project(lng, lat));
-            const d = pathPoints.map((p, i) => `${i === 0 ? 'M' : 'L'}${p[0]},${p[1]}`).join(' ');
+          roads.map((road: any) => {
+            const pathPoints = road.path.map(([lng, lat]: [number, number]) => project(lng, lat));
+            const d = pathPoints.map((p: number[], i: number) => `${i === 0 ? 'M' : 'L'}${p[0]},${p[1]}`).join(' ');
             const isConflict = road.wayId === 'way-48213001' || road.wayId === 'way-92001001';
             return (
               <g key={road.wayId}>
@@ -142,11 +185,11 @@ export default function CityMesh({ selectedCity, onCityChange }: CityMeshProps) 
 
         {/* Buildings (wireframe 3D) */}
         {activeLayers.buildings &&
-          buildings.map((building) => {
-            const basePoints = building.coordinates.map(([lng, lat]) => project(lng, lat));
+          buildings.map((building: any) => {
+            const basePoints = building.coordinates.map(([lng, lat]: [number, number]) => project(lng, lat));
             const heightOffset = building.height * 0.35;
-            const topPoints = basePoints.map(([x, y]) => [x, y - heightOffset]);
-            const topPath = topPoints.map((p, i) => `${i === 0 ? 'M' : 'L'}${p[0]},${p[1]}`).join(' ') + 'Z';
+            const topPoints = basePoints.map(([x, y]: number[]) => [x, y - heightOffset]);
+            const topPath = topPoints.map((p: number[], i: number) => `${i === 0 ? 'M' : 'L'}${p[0]},${p[1]}`).join(' ') + 'Z';
             const isHovered = hoveredElement === building.wayId;
 
             return (
@@ -156,7 +199,7 @@ export default function CityMesh({ selectedCity, onCityChange }: CityMeshProps) 
                 onMouseLeave={() => setHoveredElement(null)}
                 style={{ cursor: 'pointer' }}
               >
-                {basePoints.map((bp, i) => {
+                {basePoints.map((bp: number[], i: number) => {
                   const next = basePoints[(i + 1) % basePoints.length];
                   const tp = topPoints[i];
                   const tnext = topPoints[(i + 1) % topPoints.length];
@@ -210,7 +253,7 @@ export default function CityMesh({ selectedCity, onCityChange }: CityMeshProps) 
 
         {/* Planned work markers */}
         {activeLayers.works &&
-          cityWorks.map((work) => {
+          cityWorks.map((work: any) => {
             const [cx, cy] = project(work.location.lng, work.location.lat);
             const isConflicted = work.status === 'conflicted';
             return (

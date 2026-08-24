@@ -5,10 +5,12 @@ import MetricCard from '@/components/dashboard/MetricCard';
 import ConflictTimeline from '@/components/dashboard/ConflictTimeline';
 import LiveFeed from '@/components/dashboard/LiveFeed';
 import DepartmentGrid from '@/components/dashboard/DepartmentGrid';
-import { dashboardMetrics } from '@/lib/mock-data';
+import { useDashboardMetrics } from '@/lib/live';
 import { formatCurrency } from '@/lib/utils';
 
 export default function DashboardPage() {
+  const { data: dashboardMetrics } = useDashboardMetrics();
+
   return (
     <div className="page-container">
       <div className="mb-5 sm:mb-6">

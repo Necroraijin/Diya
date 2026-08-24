@@ -13,7 +13,8 @@ import {
   X,
   Cpu,
 } from 'lucide-react';
-import { agentActivities, reasoningTraces, departments } from '@/lib/mock-data';
+import { reasoningTraces } from '@/lib/mock-data';
+import { useAgentActivity, useDepartments } from '@/lib/live';
 import { cn, formatDuration, timeAgo, getStatusColor, getStatusBg } from '@/lib/utils';
 import type { ReasoningTrace } from '@/types';
 
@@ -27,9 +28,12 @@ export default function AgentsPage() {
   const [selectedTrace, setSelectedTrace] = useState<ReasoningTrace | null>(null);
   const [typeFilter, setTypeFilter] = useState<string>('all');
 
+  const { data: agentActivities } = useAgentActivity(100);
+  const { data: departments } = useDepartments();
+
   const filteredActivities = agentActivities
-    .filter((a) => typeFilter === 'all' || a.agentType === typeFilter)
-    .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
+    .filter((a: any) => typeFilter === 'all' || a.agentType === typeFilter)
+    .sort((a: any, b: any) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
 
   const handleViewTrace = (traceId: string) => {
     const trace = reasoningTraces.find((t) => t.id === traceId);
@@ -62,7 +66,7 @@ export default function AgentsPage() {
                     <span className="text-xs text-diya-text-muted ml-1">active</span>
                   </div>
                   <div className="flex items-center gap-1">
-                    {departments.map((d) => (
+                    {departments.map((d: any) => (
                       <div
                         key={d.id}
                         className={cn(

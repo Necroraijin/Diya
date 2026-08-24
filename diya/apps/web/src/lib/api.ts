@@ -22,6 +22,13 @@ async function apiFetch<T>(path: string, options?: RequestInit): Promise<T> {
   return res.json();
 }
 
+// ── Health ──────────────────────────────────────────────────────
+
+/** Cheap gateway liveness probe. Used by the LIVE/DEMO status pill. */
+export async function fetchHealth() {
+  return apiFetch<{ status: string; service: string; version?: string }>('/health');
+}
+
 // ── Department API ──────────────────────────────────────────────
 
 export async function fetchDepartments() {

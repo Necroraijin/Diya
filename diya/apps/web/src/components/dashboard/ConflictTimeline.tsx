@@ -9,7 +9,7 @@ import {
   Tooltip,
   ResponsiveContainer,
 } from 'recharts';
-import { dashboardMetrics } from '@/lib/mock-data';
+import { useDashboardMetrics } from '@/lib/live';
 
 const CustomTooltip = ({ active, payload, label }: any) => {
   if (!active || !payload) return null;
@@ -27,6 +27,9 @@ const CustomTooltip = ({ active, payload, label }: any) => {
 };
 
 export default function ConflictTimeline() {
+  const { data: metrics } = useDashboardMetrics();
+  const trend = metrics?.conflictTrend ?? [];
+
   return (
     <div className="card animate-slide-up">
       <div className="card-header">
@@ -47,7 +50,7 @@ export default function ConflictTimeline() {
       </div>
       <div className="p-3 sm:p-4 h-[180px] sm:h-[220px]">
         <ResponsiveContainer width="100%" height="100%">
-          <AreaChart data={dashboardMetrics.conflictTrend}>
+          <AreaChart data={trend}>
             <defs>
               <linearGradient id="gradDetected" x1="0" y1="0" x2="0" y2="1">
                 <stop offset="0%" stopColor="rgba(255,255,255,0.15)" />

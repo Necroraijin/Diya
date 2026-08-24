@@ -1,7 +1,7 @@
 'use client';
 
 import { X, AlertTriangle, Clock, MapPin, IndianRupee } from 'lucide-react';
-import { conflicts } from '@/lib/mock-data';
+import { useConflicts } from '@/lib/live';
 import { formatDate, formatCurrency, cn, getStatusColor, getStatusBg } from '@/lib/utils';
 
 interface ConflictPanelProps {
@@ -10,7 +10,8 @@ interface ConflictPanelProps {
 }
 
 export default function ConflictPanel({ conflictId, onClose }: ConflictPanelProps) {
-  const conflict = conflicts.find((c) => c.id === conflictId);
+  const { data: conflicts } = useConflicts();
+  const conflict = conflicts.find((c: any) => c.id === conflictId);
   if (!conflict) return null;
 
   return (
@@ -48,7 +49,7 @@ export default function ConflictPanel({ conflictId, onClose }: ConflictPanelProp
           Affected Works ({conflict.works.length})
         </span>
         <div className="space-y-2">
-          {conflict.works.map((work) => (
+          {conflict.works.map((work: any) => (
             <div key={work.id} className="flex items-start gap-2">
               <div className="w-1 h-1 rounded-full bg-diya-text-muted mt-1.5 flex-shrink-0" />
               <div className="min-w-0">

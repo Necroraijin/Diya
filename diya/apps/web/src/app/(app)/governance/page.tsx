@@ -26,7 +26,7 @@ import {
   RotateCcw,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { departments } from '@/lib/mock-data';
+import { useDepartments } from '@/lib/live';
 
 // ── Agent Identity Demo Data ────────────────────────────────────────────────
 
@@ -181,6 +181,7 @@ export default function GovernancePage() {
   const [demoResult, setDemoResult] = useState<ArmorCheck | null>(null);
   const [demoLoading, setDemoLoading] = useState(false);
   const [selectedIdentity, setSelectedIdentity] = useState<string | null>(null);
+  const { data: departments } = useDepartments();
 
   const tabs = [
     { id: 'gateway' as const, label: 'Agent Gateway', icon: Network },
@@ -361,7 +362,7 @@ export default function GovernancePage() {
           {/* Department scope overview */}
           <h2 className="text-sm font-medium mb-3">Department Agent Scopes</h2>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 mb-6">
-            {departments.map((dept) => (
+            {departments.map((dept: any) => (
               <div
                 key={dept.id}
                 className={cn(

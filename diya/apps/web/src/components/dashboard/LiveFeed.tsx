@@ -9,7 +9,7 @@ import {
   FileText,
   Shield,
 } from 'lucide-react';
-import { agentActivities } from '@/lib/mock-data';
+import { useAgentActivity } from '@/lib/live';
 import { cn, timeAgo, getStatusColor, formatDuration } from '@/lib/utils';
 
 const getActivityIcon = (action: string, status: string) => {
@@ -22,8 +22,11 @@ const getActivityIcon = (action: string, status: string) => {
 };
 
 export default function LiveFeed() {
-  const sortedActivities = [...agentActivities].sort(
-    (a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()
+  // Refetches on every agent.activity / armor.blocked SSE event, so this really
+  // is live rather than a fixture named "live".
+  const { data: activities } = useAgentActivity(50);
+  const sortedActivities = [...activities].sort(
+    (a: any, b: any) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()
   );
 
   return (
@@ -36,7 +39,7 @@ export default function LiveFeed() {
         <span className="text-xs text-diya-text-muted">{sortedActivities.length} events</span>
       </div>
       <div className="overflow-y-auto max-h-[350px] lg:max-h-[450px]">
-        {sortedActivities.map((activity) => {
+        {sortedActivities.map((activity: any) => {
           const Icon = getActivityIcon(activity.action, activity.status);
           return (
             <div

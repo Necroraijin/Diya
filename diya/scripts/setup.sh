@@ -12,9 +12,10 @@ command -v node >/dev/null 2>&1 || { echo "Node.js is required. Install from htt
 command -v npm >/dev/null 2>&1 || { echo "npm is required. Install Node.js from https://nodejs.org"; exit 1; }
 
 echo "[1/4] Installing frontend dependencies..."
-cd apps/web
+# Run at the repo root: apps/web is an npm workspace, so its dependencies hoist
+# to diya/node_modules. Installing from inside apps/web works but scatters a
+# second, partial node_modules that then shadows the hoisted one.
 npm install
-cd ../..
 
 echo ""
 echo "[2/4] Setting up Python virtual environments..."
@@ -55,15 +56,13 @@ fi
 
 echo ""
 echo "[4/4] Verifying setup..."
-cd apps/web
-npx next build --no-lint 2>/dev/null && echo "  Frontend build: OK" || echo "  Frontend build: FAILED"
-cd ../..
+npm run build --workspace=apps/web >/dev/null 2>&1     && echo "  Frontend build: OK"     || echo "  Frontend build: FAILED"
 
 echo ""
 echo "=== Setup Complete ==="
 echo ""
 echo "Quick start:"
-echo "  Frontend:     cd apps/web && npm run dev"
-echo "  API Gateway:  cd apps/api-gateway && uvicorn main:app --port 8000 --reload"
+echo "  Frontend:     npm run dev"
+echo "  All services: ./scripts/dev.sh"
 echo "  Docker:       docker compose -f docker/docker-compose.yml up --build"
 echo ""

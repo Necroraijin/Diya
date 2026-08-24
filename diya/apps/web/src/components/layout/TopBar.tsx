@@ -9,6 +9,7 @@ import {
 } from 'lucide-react';
 import { useState } from 'react';
 import { cn } from '@/lib/utils';
+import { useConnection } from '@/lib/live';
 
 const pageTitles: Record<string, { title: string; breadcrumb: string[] }> = {
   '/dashboard': { title: 'Dashboard', breadcrumb: ['DIYA', 'Dashboard'] },
@@ -23,6 +24,16 @@ export default function TopBar() {
   const pathname = usePathname();
   const [searchOpen, setSearchOpen] = useState(false);
   const pageInfo = pageTitles[pathname || '/dashboard'] || pageTitles['/dashboard'];
+  const connection = useConnection();
+
+  // Three states, not two: "we have not checked yet" is not the same claim as
+  // "the gateway is down", and showing DEMO for the first few hundred
+  // milliseconds of every page load would be a lie in the other direction.
+  const status = {
+    live: { label: 'Live — API Gateway', dot: 'bg-diya-resolved status-dot-online' },
+    demo: { label: 'Demo data — gateway offline', dot: 'bg-diya-warning' },
+    loading: { label: 'Connecting…', dot: 'bg-diya-text-muted' },
+  }[connection];
 
   return (
     <header className="h-12 sm:h-14 bg-diya-surface/50 backdrop-blur-md border-b border-diya-border flex items-center justify-between px-4 sm:px-6 z-40 flex-shrink-0">
@@ -48,9 +59,12 @@ export default function TopBar() {
       {/* Right actions */}
       <div className="flex items-center gap-1.5 sm:gap-2">
         {/* System status - hidden on mobile */}
-        <div className="hidden md:flex items-center gap-2 px-3 py-1.5 rounded-lg bg-diya-card border border-diya-border mr-1">
-          <div className="w-1.5 h-1.5 rounded-full bg-diya-resolved status-dot-online" />
-          <span className="text-xs text-diya-text-muted">System Online</span>
+        <div
+          className="hidden md:flex items-center gap-2 px-3 py-1.5 rounded-lg bg-diya-card border border-diya-border mr-1"
+          title={status.label}
+        >
+          <div className={cn('w-1.5 h-1.5 rounded-full', status.dot)} />
+          <span className="text-xs text-diya-text-muted">{status.label}</span>
           <Activity className="w-3 h-3 text-diya-text-muted" />
         </div>
 
